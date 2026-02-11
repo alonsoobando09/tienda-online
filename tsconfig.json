@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts"
+, "app/context/CartContext.jsx", "app/layout.jsx", "app/categorias/venezolanos/page.jsx", "app/categorias/reposteria/page.jsx", "app/categorias/otros/page.jsx", "app/categorias/licores/page.jsx", "app/categorias/lacteos/page.jsx", "app/categorias/galleteria/page.jsx", "app/categorias/frutos-secos/page.jsx", "app/categorias/confiteria/page.jsx", "app/categorias/cereales/page.jsx", "app/categorias/carnicos/page.jsx"  ],
+  "exclude": ["node_modules"]
+}
