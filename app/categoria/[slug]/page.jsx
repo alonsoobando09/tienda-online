@@ -80,10 +80,10 @@ const productos = {
   ],
   frutossecos: [
     {
-      nombre: "Queso de Mano",
+      nombre: "pistachos",
       precioDetal: 12000,
       precioMayor: 10000,
-      tipo: "Perecedero",
+      tipo: "no Perecedero",
       imagen: "/categorias/lacteos.jpg",
     },
   ],
@@ -157,7 +157,7 @@ export default function CategoriaPage() {
           fill
           style={{ objectFit: "cover" }}
           onError={(e) => {
-    e.currentTarget.src = "/categorias/default.jpg";
+    e.currentTarget.src = "public/categorias/default.jpg";
   }}
         />
 

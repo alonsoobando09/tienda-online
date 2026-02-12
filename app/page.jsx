@@ -11,7 +11,7 @@ const categorias = [
 { slug: "galleteria", nombre: "Galletería", imagen: "/categorias/galleteria.jpg" },
 { slug: "venezolanos", nombre: "Importados Venezolanos", imagen: "/categorias/venezolanos.jpg" },
 { slug: "licores", nombre: "Licores", imagen: "/categorias/licores.jpg" },
-{ slug: "frutos-secos", nombre: "Frutos Secos", imagen: "/categorias/frutos-secos.jpg" },
+{ slug: "frutossecos", nombre: "Frutos Secos", imagen: "/categorias/frutos-secos.jpg" },
 { slug: "confiteria", nombre: "Confitería", imagen: "/categorias/confiteria.jpg" },
 { slug: "cereales", nombre: "Cereales", imagen: "/categorias/cereales.jpg" },
 { slug: "electronicos", nombre: "Electrónicos", imagen: "/categorias/electronicos.jpg" },
