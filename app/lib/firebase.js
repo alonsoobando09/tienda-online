@@ -3,6 +3,9 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+// import { db } from "@/lib/firebase";
+// import { auth } from "@/lib/firebase";
+
 
 const firebaseConfig = {
   apiKey: "demo",
