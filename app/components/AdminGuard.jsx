@@ -1,11 +1,15 @@
 "use client";
-import { useAuth } from "@/app/context/AuthContext";
 
 export default function AdminGuard({ children }) {
-  const { user } = useAuth();
+  // Luego conectamos auth real
+  const isAdmin = true;
 
-  if (user.role !== "admin") {
-    return <p>⛔ Acceso restringido</p>;
+  if (!isAdmin) {
+    return (
+      <div style={{ padding: 40 }}>
+        <h2>⛔ Acceso denegado</h2>
+      </div>
+    );
   }
 
   return children;
