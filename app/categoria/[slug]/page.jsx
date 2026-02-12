@@ -15,7 +15,7 @@ const productos = {
       imagen: "/categorias/ZENÚ.jpg",
     },
     {
-      nombre: "Chuleta de Cerdo",
+      nombre: "Chorizo santarrosano",
       precioDetal: 22000,
       precioMayor: 20000,
       tipo: "Perecedero",
@@ -23,7 +23,107 @@ const productos = {
     },
   ],
 
-  lacteos: [
+  cereales: [
+    {
+      nombre: "granola",
+      precioDetal: 12000,
+      precioMayor: 10000,
+      tipo: "no Perecedero",
+      imagen: "/categorias/lacteos.jpg",
+    },
+  ],
+  
+   confiteria: [
+    {
+      nombre: "dulces",
+      precioDetal: 12000,
+      precioMayor: 10000,
+      tipo: "no Perecedero",
+      imagen: "/categorias/lacteos.jpg",
+    },
+  ],
+   electronicos: [
+    {
+      nombre: "camaras",
+      precioDetal: 12000,
+      precioMayor: 10000,
+      tipo: "Perecedero",
+      imagen: "/categorias/lacteos.jpg",
+    },
+  ],
+   lacteos: [
+    {
+      nombre: "Queso de Mano",
+      precioDetal: 12000,
+      precioMayor: 10000,
+      tipo: "Perecedero",
+      imagen: "/categorias/lacteos.jpg",
+    },
+  ],
+   jugueteria: [
+    {
+      nombre: "Queso de Mano",
+      precioDetal: 12000,
+      precioMayor: 10000,
+      tipo: "Perecedero",
+      imagen: "/categorias/lacteos.jpg",
+    },
+  ],
+  venezolanos: [
+    {
+      nombre: "Queso de Mano",
+      precioDetal: 12000,
+      precioMayor: 10000,
+      tipo: "Perecedero",
+      imagen: "/categorias/lacteos.jpg",
+    },
+  ],
+  frutossecos: [
+    {
+      nombre: "Queso de Mano",
+      precioDetal: 12000,
+      precioMayor: 10000,
+      tipo: "Perecedero",
+      imagen: "/categorias/lacteos.jpg",
+    },
+  ],
+   galleteria: [
+    {
+      nombre: "Queso de Mano",
+      precioDetal: 12000,
+      precioMayor: 10000,
+      tipo: "Perecedero",
+      imagen: "/categorias/lacteos.jpg",
+    },
+  ],
+  licores: [
+    {
+      nombre: "Queso de Mano",
+      precioDetal: 12000,
+      precioMayor: 10000,
+      tipo: "Perecedero",
+      imagen: "/categorias/lacteos.jpg",
+    },
+  ],
+  reposteria: [
+    {
+      nombre: "Queso de Mano",
+      precioDetal: 12000,
+      precioMayor: 10000,
+      tipo: "Perecedero",
+      imagen: "/categorias/lacteos.jpg",
+    },
+  ],
+  servicios: [
+    {
+      nombre: "Queso de Mano",
+      precioDetal: 12000,
+      precioMayor: 10000,
+      tipo: "Perecedero",
+      imagen: "/categorias/lacteos.jpg",
+    },
+  ],
+  usados: [
     {
       nombre: "Queso de Mano",
       precioDetal: 12000,
