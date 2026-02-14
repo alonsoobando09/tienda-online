@@ -29,6 +29,29 @@ background: "linear-gradient(180deg, #FDF8F1, #FDF8F1)",
 fontFamily: "Arial",
 }}
 >
+  {/* BOTÓN ADMIN */}
+<div
+  style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    padding: "20px 40px",
+  }}
+>
+  <Link
+    href="/admin"
+    style={{
+      background: "#111",
+      color: "white",
+      padding: "10px 18px",
+      borderRadius: "8px",
+      textDecoration: "none",
+      fontWeight: "bold",
+      fontSize: "14px",
+    }}
+  >
+    🔐 Admin
+  </Link>
+</div>
 {/* HERO */}
 <section style={{ padding: "80px 40px", textAlign: "center" }}>
 <h1 style={{ fontSize: "42px", color: "#2D2926", marginBottom: "20px" }}>
