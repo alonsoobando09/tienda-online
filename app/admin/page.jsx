@@ -3,7 +3,9 @@
 /* ======================================================
    IMPORTS
 ====================================================== */
+
 import { useEffect, useState } from "react";
+import AdminGuard from "@/components/AdminGuard";
 import Link from "next/link";
 import {
   Users,
@@ -15,8 +17,9 @@ import {
 import { motion } from "framer-motion";
 
 /* ======================================================
-   PRODUCTOS DEMO (Luego BD)
+   PRODUCTOS DEMO
 ====================================================== */
+
 const productosDemo = [
   {
     id: 1,
@@ -37,12 +40,12 @@ const productosDemo = [
 ];
 
 /* ======================================================
-   COMPONENTE
+   COMPONENTE PRINCIPAL
 ====================================================== */
+
 export default function AdminPage() {
-  /* ===============================
-     STATES DASHBOARD
-  =============================== */
+  /* ================= STATES ================= */
+
   const [stats, setStats] = useState({
     ventasHoy: 0,
     ingresosHoy: 0,
@@ -52,9 +55,8 @@ export default function AdminPage() {
 
   const [ventas, setVentas] = useState([]);
 
-  /* ===============================
-     KPIs PRODUCTOS
-  =============================== */
+  /* ================= KPIs PRODUCTOS ================= */
+
   const totalProductos = productosDemo.length;
 
   const totalStock = productosDemo.reduce(
@@ -62,9 +64,8 @@ export default function AdminPage() {
     0
   );
 
-  /* ===============================
-     DATA DEMO DASHBOARD
-  =============================== */
+  /* ================= DATA DEMO ================= */
+
   useEffect(() => {
     setStats({
       ventasHoy: 32,
@@ -89,9 +90,8 @@ export default function AdminPage() {
     ]);
   }, []);
 
-  /* ===============================
-     CARDS DASHBOARD
-  =============================== */
+  /* ================= CARDS ================= */
+
   const cards = [
     {
       title: "Ventas Hoy",
@@ -115,129 +115,132 @@ export default function AdminPage() {
     },
   ];
 
-  /* ===============================
+  /* ======================================================
      UI
-  =============================== */
+  ====================================================== */
+
   return (
-    <main style={container}>
-      {/* ================= HEADER ================= */}
-      <h1 style={title}>
-        🧑‍💼 Panel Administrador
-      </h1>
+    <AdminGuard>
+      <main style={container}>
+        {/* HEADER */}
+        <h1 style={title}>
+          🧑‍💼 Panel Administrador
+        </h1>
 
-      {/* ================= DASHBOARD STATS ================= */}
-      <div style={statsGrid}>
-        {cards.map((card, i) => {
-          const Icon = card.icon;
+        {/* STATS */}
+        <div style={statsGrid}>
+          {cards.map((card, i) => {
+            const Icon = card.icon;
 
-          return (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <div style={cardStat}>
-                <p>{card.title}</p>
-                <h2>{card.value}</h2>
-                <Icon size={28} />
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* ================= KPIs PRODUCTOS ================= */}
-      <div style={gridKPI}>
-        <div style={cardKPI}>
-          <Package />
-          <h3>Productos</h3>
-          <p>{totalProductos}</p>
-        </div>
-
-        <div style={cardKPI}>
-          <h3>Stock total</h3>
-          <p>{totalStock}</p>
-        </div>
-
-        <div style={cardKPI}>
-          <h3>Categorías</h3>
-          <p>2</p>
-        </div>
-      </div>
-
-      {/* ================= BOTÓN ================= */}
-      <Link href="/admin/productos/nuevo">
-        <button style={btnNuevo}>
-          ➕ Crear producto
-        </button>
-      </Link>
-
-      {/* ================= LISTADO PRODUCTOS ================= */}
-      <div style={{ marginTop: 30 }}>
-        {productosDemo.map((p) => (
-          <div key={p.id} style={cardProducto}>
-            {/* INFO */}
-            <div>
-              <strong style={{ fontSize: 18 }}>
-                {p.nombre}
-              </strong>
-
-              <p>
-                💲 Detal: $
-                {p.precioDetal.toLocaleString()}
-              </p>
-
-              <p>
-                🏷️ Mayor: $
-                {p.precioMayor.toLocaleString()}
-              </p>
-
-              <p>📦 Stock: {p.stock}</p>
-
-              <small>
-                Categoría: {p.categoria}
-              </small>
-            </div>
-
-            {/* ACCIONES */}
-            <div style={acciones}>
-              <Link
-                href={`/admin/productos/editar/${p.id}`}
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
               >
-                <button style={btnEditar}>
-                  ✏️ Editar
-                </button>
-              </Link>
+                <div style={cardStat}>
+                  <p>{card.title}</p>
+                  <h2>{card.value}</h2>
+                  <Icon size={28} />
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
 
-              <button style={btnEliminar}>
-                🗑️ Eliminar
-              </button>
-            </div>
+        {/* KPIs */}
+        <div style={gridKPI}>
+          <div style={cardKPI}>
+            <Package />
+            <h3>Productos</h3>
+            <p>{totalProductos}</p>
           </div>
-        ))}
-      </div>
 
-      {/* ================= TABLA VENTAS ================= */}
-      <table style={table}>
-        <thead>
-          <tr>
-            <th>Cliente</th>
-            <th>Total</th>
-            <th>Estado</th>
-          </tr>
-        </thead>
+          <div style={cardKPI}>
+            <h3>Stock total</h3>
+            <p>{totalStock}</p>
+          </div>
 
-        <tbody>
-          {ventas.map((v) => (
-            <tr key={v.id}>
-              <td>{v.cliente}</td>
-              <td>${v.total.toLocaleString()}</td>
-              <td>{v.estado}</td>
-            </tr>
+          <div style={cardKPI}>
+            <h3>Categorías</h3>
+            <p>2</p>
+          </div>
+        </div>
+
+        {/* BOTÓN */}
+        <Link href="/admin/productos/nuevo">
+          <button style={btnNuevo}>
+            ➕ Crear producto
+          </button>
+        </Link>
+
+        {/* LISTADO PRODUCTOS */}
+        <div style={{ marginTop: 30 }}>
+          {productosDemo.map((p) => (
+            <div key={p.id} style={cardProducto}>
+              <div>
+                <strong style={{ fontSize: 18 }}>
+                  {p.nombre}
+                </strong>
+
+                <p>
+                  💲 Detal: $
+                  {p.precioDetal.toLocaleString()}
+                </p>
+
+                <p>
+                  🏷️ Mayor: $
+                  {p.precioMayor.toLocaleString()}
+                </p>
+
+                <p>📦 Stock: {p.stock}</p>
+
+                <small>
+                  Categoría: {p.categoria}
+                </small>
+              </div>
+
+              <div style={acciones}>
+                <Link
+                  href={`/admin/productos/editar/${p.id}`}
+                >
+                  <button style={btnEditar}>
+                    ✏️ Editar
+                  </button>
+                </Link>
+
+                <button style={btnEliminar}>
+                  🗑️ Eliminar
+                </button>
+              </div>
+            </div>
           ))}
-        </tbody>
-      </table>
-    </main>
+        </div>
+
+        {/* TABLA VENTAS */}
+        <table style={table}>
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Total</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {ventas.map((v) => (
+              <tr key={v.id}>
+                <td>{v.cliente}</td>
+                <td>
+                  ${v.total.toLocaleString()}
+                </td>
+                <td>{v.estado}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </main>
+    </AdminGuard>
   );
 }
 

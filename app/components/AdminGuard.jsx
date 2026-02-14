@@ -1,16 +1,18 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
 export default function AdminGuard({ children }) {
-  // Luego conectamos auth real
-  const isAdmin = true;
+  const router = useRouter();
 
-  if (!isAdmin) {
-    return (
-      <div style={{ padding: 40 }}>
-        <h2>⛔ Acceso denegado</h2>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const isAdmin = localStorage.getItem("admin");
 
-  return children;
+    if (!isAdmin) {
+      router.push("/login");
+    }
+  }, [router]);
+
+  return <>{children}</>;
 }
