@@ -4,55 +4,66 @@ import { useParams } from "next/navigation";
 import Image from "next/image";
 import AddToCart from "@/app/components/AddToCart";
 
-
 const productos = {
   carnicos: [
     {
-      nombre: "chuleta Ahumada de Cerdo",
+      id: "chuleta-ahumada-cerdo",
+      nombre: "Chuleta Ahumada de Cerdo",
       precioDetal: 28000,
       precioMayor: 25000,
       tipo: "Perecedero",
-      imagen: "/categorias/ZENÚ.jpg",
+      imagen: "/categorias/chuleta.jpeg.jpeg",
     },
     {
+      id: "chorizo-santarrosano",
       nombre: "Chorizo santarrosano",
       precioDetal: 22000,
       precioMayor: 20000,
       tipo: "Perecedero",
       imagen: "/categorias/carnicos.jpg",
     },
+    {
+      id: "costillas-cerdo-ahumadas",
+      nombre: "Costillas de Cerdo Ahumadas",
+      precioDetal: 22000,
+      precioMayor: 20000,
+      tipo: "Perecedero",
+      imagen: "/categorias/carnicos.jpg",
+    },
   ],
-
   cereales: [
     {
-      nombre: "granola",
+      id: "granola",
+      nombre: "Granola",
       precioDetal: 12000,
       precioMayor: 10000,
-      tipo: "no Perecedero",
-      imagen: "/categorias/lacteos.jpg",
+      tipo: "No perecedero",
+      imagen: "/categorias/cereales.jpg",
     },
   ],
-  
-   confiteria: [
+  confiteria: [
     {
-      nombre: "dulces",
+      id: "dulces",
+      nombre: "Dulces",
       precioDetal: 12000,
       precioMayor: 10000,
-      tipo: "no Perecedero",
-      imagen: "/categorias/lacteos.jpg",
+      tipo: "No perecedero",
+      imagen: "/categorias/confiteria.jpg",
     },
   ],
-   electronicos: [
+  electronicos: [
     {
-      nombre: "camaras",
+      id: "camaras",
+      nombre: "Cámaras",
       precioDetal: 12000,
       precioMayor: 10000,
-      tipo: "Perecedero",
-      imagen: "/categorias/lacteos.jpg",
+      tipo: "Tecnología",
+      imagen: "/categorias/electronicos.jpg",
     },
   ],
-   lacteos: [
+  lacteos: [
     {
+      id: "queso-mano-lacteos",
       nombre: "Queso de Mano",
       precioDetal: 12000,
       precioMayor: 10000,
@@ -60,76 +71,84 @@ const productos = {
       imagen: "/categorias/lacteos.jpg",
     },
   ],
-   jugueteria: [
+  jugueteria: [
     {
-      nombre: "Queso de Mano",
+      id: "juguete-surtido",
+      nombre: "Juguete surtido",
       precioDetal: 12000,
       precioMayor: 10000,
-      tipo: "Perecedero",
-      imagen: "/categorias/lacteos.jpg",
+      tipo: "No perecedero",
+      imagen: "/categorias/jugueteria.jpg",
     },
   ],
   venezolanos: [
     {
-      nombre: "Queso de Mano",
+      id: "producto-venezolano-surtido",
+      nombre: "Producto venezolano surtido",
       precioDetal: 12000,
       precioMayor: 10000,
-      tipo: "Perecedero",
-      imagen: "/categorias/lacteos.jpg",
+      tipo: "Importado",
+      imagen: "/categorias/venezolanos.jpg",
     },
   ],
   frutossecos: [
     {
-      nombre: "pistachos",
+      id: "pistachos",
+      nombre: "Pistachos",
       precioDetal: 12000,
       precioMayor: 10000,
-      tipo: "no Perecedero",
-      imagen: "/categorias/lacteos.jpg",
+      tipo: "No perecedero",
+      imagen: "/categorias/frutos-secos.jpg",
     },
   ],
-   galleteria: [
+  galleteria: [
     {
-      nombre: "Queso de Mano",
+      id: "galletas-surtidas",
+      nombre: "Galletas surtidas",
       precioDetal: 12000,
       precioMayor: 10000,
-      tipo: "Perecedero",
-      imagen: "/categorias/lacteos.jpg",
+      tipo: "No perecedero",
+      imagen: "/categorias/galleteria.jpg",
     },
   ],
   licores: [
     {
-      nombre: "Queso de Mano",
+      id: "licor-surtido",
+      nombre: "Licor surtido",
       precioDetal: 12000,
       precioMayor: 10000,
-      tipo: "Perecedero",
-      imagen: "/categorias/lacteos.jpg",
+      tipo: "Bebida",
+      imagen: "/categorias/licores.jpg",
     },
   ],
   reposteria: [
     {
-      nombre: "Queso de Mano",
+      id: "insumo-reposteria",
+      nombre: "Insumo de repostería",
       precioDetal: 12000,
       precioMayor: 10000,
-      tipo: "Perecedero",
-      imagen: "/categorias/lacteos.jpg",
+      tipo: "No perecedero",
+      imagen: "/categorias/reposteria.jpg",
     },
   ],
   servicios: [
     {
-      nombre: "Queso de Mano",
+      id: "servicio-comercial",
+      nombre: "Servicio comercial",
       precioDetal: 12000,
       precioMayor: 10000,
-      tipo: "Perecedero",
-      imagen: "/categorias/lacteos.jpg",
+      tipo: "Servicio",
+      imagen: "/categorias/servicios.jpg",
     },
   ],
   usados: [
     {
-      nombre: "Queso de Mano",
+      id: "producto-segunda",
+      nombre: "Producto de segunda",
       precioDetal: 12000,
       precioMayor: 10000,
-      tipo: "Perecedero",
-      imagen: "/categorias/lacteos.jpg",
+      tipo: "Usado",
+      imagen: "/categorias/usados.jpg",
     },
   ],
 };
@@ -140,8 +159,6 @@ export default function CategoriaPage() {
 
   return (
     <main style={{ padding: 40, fontFamily: "Arial" }}>
-      
-      {/* 🖼️ BANNER */}
       <div
         style={{
           position: "relative",
@@ -156,9 +173,6 @@ export default function CategoriaPage() {
           alt={slug}
           fill
           style={{ objectFit: "cover" }}
-          onError={(e) => {
-    e.currentTarget.src = "public/categorias/default.jpg";
-  }}
         />
 
         <div
@@ -179,7 +193,6 @@ export default function CategoriaPage() {
         </div>
       </div>
 
-      {/* 🛒 GRID PRODUCTOS */}
       <div
         style={{
           display: "grid",
@@ -187,9 +200,9 @@ export default function CategoriaPage() {
           gap: 25,
         }}
       >
-        {data.map((p, i) => (
+        {data.map((p) => (
           <div
-            key={i}
+            key={p.id}
             style={{
               border: "1px solid #eee",
               borderRadius: 14,
@@ -209,11 +222,10 @@ export default function CategoriaPage() {
 
             <h3 style={{ marginTop: 10 }}>{p.nombre}</h3>
 
-            <p>💲 Detal: ${p.precioDetal.toLocaleString()}</p>
-            <p>🏷️ Mayor: ${p.precioMayor.toLocaleString()}</p>
-            <p>📦 {p.tipo}</p>
+            <p>Detal: ${p.precioDetal.toLocaleString()}</p>
+            <p>Mayor: ${p.precioMayor.toLocaleString()}</p>
+            <p>{p.tipo}</p>
             <AddToCart product={p} />
-
 
             <a
               href={`https://wa.me/573249111150?text=Hola quiero comprar ${p.nombre}`}

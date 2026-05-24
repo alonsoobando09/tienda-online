@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import { productos } from "@/app/data/productos";
 
@@ -13,24 +14,21 @@ export default function ProductoDetalle() {
 
   return (
     <main className="p-10">
-
-      <img
-        src={prod.imagen}
+      <Image
+        src={prod.imagen || "/categorias/carnicos.jpg"}
+        alt={prod.nombre || "Producto"}
+        width={420}
+        height={320}
         className="w-80 rounded-2xl"
       />
 
-      <h1 className="text-3xl font-bold mt-4">
-        {prod.nombre}
-      </h1>
+      <h1 className="text-3xl font-bold mt-4">{prod.nombre}</h1>
 
-      <p className="text-xl text-green-600">
-        ${prod.precio}
-      </p>
+      <p className="text-xl text-green-600">${prod.precio}</p>
 
       <button className="mt-4 bg-black text-white px-6 py-2 rounded-xl">
         Agregar al carrito
       </button>
-
     </main>
   );
 }

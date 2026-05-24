@@ -1,7 +1,10 @@
 import "./globals.css";
-import { CartProvider } from "./context/CartContext";
-import WhatsappButton from "./components/WhatsappButton";
+
+import Providers from "./providers";
+
 import Header from "./components/Header";
+import WhatsappButton from "./components/WhatsappButton";
+import PosButton from "./components/PosButton";
 
 export const metadata = {
   title: "Mi Tienda",
@@ -12,15 +15,21 @@ export default function RootLayout({ children }) {
   return (
     <html lang="es">
       <body>
-        <CartProvider>
+
+        <Providers>
 
           <Header />
 
-          {children}
+          <main>
+            {children}
+          </main>
 
           <WhatsappButton />
 
-        </CartProvider>
+          <PosButton />
+
+        </Providers>
+
       </body>
     </html>
   );

@@ -1,16 +1,17 @@
 "use client";
-import { createContext, useContext, useState } from "react";
+
+import { createContext, useContext } from "react";
 
 const AuthContext = createContext();
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState({
-    role: "admin", // admin | cliente
-    name: "Administrador",
-  });
+const defaultUser = {
+  role: "admin",
+  name: "Administrador",
+};
 
+export function AuthProvider({ children }) {
   return (
-    <AuthContext.Provider value={{ user }}>
+    <AuthContext.Provider value={{ user: defaultUser }}>
       {children}
     </AuthContext.Provider>
   );

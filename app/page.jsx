@@ -38,7 +38,7 @@ fontFamily: "Arial",
   }}
 >
   <Link
-    href="/admin"
+    href="/login"
     style={{
       background: "#111",
       color: "white",
