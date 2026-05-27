@@ -9,10 +9,12 @@ import { db, storage } from "@/lib/firebase";
 import { collection, deleteDoc, doc, getDocs } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { ImagePlus, Save, Trash2 } from "lucide-react";
+import { categories } from "@/lib/categories";
+import { getSafeImageSrc, isRemoteImage } from "@/lib/images";
 
 const emptyForm = {
   nombre: "",
-  categoria: "general",
+  categoria: "carnicos",
   sku: "",
   proveedor: "",
   unidad: "unidad",
@@ -180,10 +182,16 @@ export default function ProductosAdminPage() {
 
             <label>
               Categoría
-              <input
+              <select
                 value={form.categoria}
                 onChange={(e) => updateField("categoria", e.target.value)}
-              />
+              >
+                {categories.map((category) => (
+                  <option key={category.slug} value={category.slug}>
+                    {category.nombre}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label>
@@ -296,12 +304,12 @@ export default function ProductosAdminPage() {
             {form.imagen && (
               <div className="admin-image-preview">
                 <Image
-                  src={form.imagen}
+                  src={getSafeImageSrc(form.imagen)}
                   alt={form.nombre || "Producto"}
                   width={160}
                   height={110}
                   style={{ objectFit: "cover", borderRadius: 8 }}
-                  unoptimized
+                  unoptimized={isRemoteImage(form.imagen)}
                 />
               </div>
             )}
@@ -359,7 +367,12 @@ export default function ProductosAdminPage() {
                       <br />
                       <small>{producto.sku || "Sin SKU"}</small>
                     </td>
-                    <td>{producto.categoria || "general"}</td>
+                    <td>
+                      {categories.find((cat) => cat.slug === producto.categoria)
+                        ?.nombre ||
+                        producto.categoria ||
+                        "Sin categoría"}
+                    </td>
                     <td>
                       Mayor: {money.format(producto.precioMayor || 0)}
                       <br />

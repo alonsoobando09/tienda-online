@@ -16,7 +16,7 @@ function normalizeProduct(body) {
     sku: String(body.sku || "").trim(),
     proveedor: String(body.proveedor || "").trim(),
     unidad: String(body.unidad || "unidad").trim(),
-    imagen: String(body.imagen || "jpg","png").trim(),
+    imagen: String(body.imagen || "").trim(),
     descripcion: String(body.descripcion || "").trim(),
     costo: Number(body.costo) || 0,
     precioMayor: Number(body.precioMayor) || 0,

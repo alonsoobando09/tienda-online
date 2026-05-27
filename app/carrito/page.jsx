@@ -125,7 +125,7 @@ export default function CarritoPage() {
       {/* WHATSAPP */}
       {cart.length > 0 && (
         <a
-          href={`https://wa.me/573249111150?text=${mensaje}`}
+          href={`https://wa.me/573132752493?text=${mensaje}`}
           target="_blank"
           style={{
             display: "inline-block",

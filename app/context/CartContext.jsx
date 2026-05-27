@@ -11,17 +11,22 @@ export function CartProvider({ children }) {
   ========================= */
   function addToCart(product) {
     setCart((prev) => {
-      const existe = prev.find((p) => p.nombre === product.nombre);
+      const normalized = {
+        ...product,
+        precioDetal: Number(product.precioDetal || product.precio || 0),
+        precioMayor: Number(product.precioMayor || product.precioDetal || 0),
+      };
+      const existe = prev.find((p) => p.id === normalized.id);
 
       if (existe) {
         return prev.map((p) =>
-          p.nombre === product.nombre
+          p.id === normalized.id
             ? { ...p, cantidad: (p.cantidad || 1) + 1 }
             : p
         );
       }
 
-      return [...prev, { ...product, cantidad: 1 }];
+      return [...prev, { ...normalized, cantidad: 1 }];
     });
   }
 

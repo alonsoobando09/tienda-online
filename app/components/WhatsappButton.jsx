@@ -2,7 +2,7 @@
 export default function WhatsappButton() {
   return (
     <a
-      href="https://wa.me/573249111150"
+      href="https://wa.me/573132752493"
       target="_blank"
       style={{
         position: "fixed",

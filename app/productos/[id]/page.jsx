@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useParams } from "next/navigation";
 import { productos } from "@/app/data/productos";
+import { getSafeImageSrc, isRemoteImage } from "@/lib/images";
 
 export default function ProductoDetalle() {
   const { id } = useParams();
@@ -15,11 +16,12 @@ export default function ProductoDetalle() {
   return (
     <main className="p-10">
       <Image
-        src={prod.imagen || "/categorias/carnicos.jpg"}
+        src={getSafeImageSrc(prod.imagen)}
         alt={prod.nombre || "Producto"}
         width={420}
         height={320}
         className="w-80 rounded-2xl"
+        unoptimized={isRemoteImage(prod.imagen)}
       />
 
       <h1 className="text-3xl font-bold mt-4">{prod.nombre}</h1>

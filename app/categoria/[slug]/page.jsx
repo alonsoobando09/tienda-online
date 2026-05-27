@@ -1,176 +1,72 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
 import AddToCart from "@/app/components/AddToCart";
+import { db } from "@/lib/firebase";
+import { getCategoryBySlug } from "@/lib/categories";
+import { getSafeImageSrc, isRemoteImage } from "@/lib/images";
+import { collection, getDocs, query, where } from "firebase/firestore";
 
-const productos = {
-  carnicos: [
-    {
-      id: "chuleta-ahumada-cerdo",
-      nombre: "Chuleta Ahumada de Cerdo",
-      precioDetal: 28000,
-      precioMayor: 25000,
-      tipo: "Perecedero",
-      imagen: "/categorias/chuleta.jpeg.jpeg",
-    },
-    {
-      id: "chorizo-santarrosano",
-      nombre: "Chorizo santarrosano",
-      precioDetal: 22000,
-      precioMayor: 20000,
-      tipo: "Perecedero",
-      imagen: "/categorias/carnicos.jpg",
-    },
-    {
-      id: "costillas-cerdo-ahumadas",
-      nombre: "Costillas de Cerdo Ahumadas",
-      precioDetal: 22000,
-      precioMayor: 20000,
-      tipo: "Perecedero",
-      imagen: "/categorias/carnicos.jpg",
-    },
-  ],
-  cereales: [
-    {
-      id: "granola",
-      nombre: "Granola",
-      precioDetal: 12000,
-      precioMayor: 10000,
-      tipo: "No perecedero",
-      imagen: "/categorias/cereales.jpg",
-    },
-  ],
-  confiteria: [
-    {
-      id: "dulces",
-      nombre: "Dulces",
-      precioDetal: 12000,
-      precioMayor: 10000,
-      tipo: "No perecedero",
-      imagen: "/categorias/confiteria.jpg",
-    },
-  ],
-  electronicos: [
-    {
-      id: "camaras",
-      nombre: "Cámaras",
-      precioDetal: 12000,
-      precioMayor: 10000,
-      tipo: "Tecnología",
-      imagen: "/categorias/electronicos.jpg",
-    },
-  ],
-  lacteos: [
-    {
-      id: "queso-mano-lacteos",
-      nombre: "Queso de Mano",
-      precioDetal: 12000,
-      precioMayor: 10000,
-      tipo: "Perecedero",
-      imagen: "/categorias/lacteos.jpg",
-    },
-  ],
-  jugueteria: [
-    {
-      id: "juguete-surtido",
-      nombre: "Juguete surtido",
-      precioDetal: 12000,
-      precioMayor: 10000,
-      tipo: "No perecedero",
-      imagen: "/categorias/jugueteria.jpg",
-    },
-  ],
-  venezolanos: [
-    {
-      id: "producto-venezolano-surtido",
-      nombre: "Producto venezolano surtido",
-      precioDetal: 12000,
-      precioMayor: 10000,
-      tipo: "Importado",
-      imagen: "/categorias/venezolanos.jpg",
-    },
-  ],
-  frutossecos: [
-    {
-      id: "pistachos",
-      nombre: "Pistachos",
-      precioDetal: 12000,
-      precioMayor: 10000,
-      tipo: "No perecedero",
-      imagen: "/categorias/frutos-secos.jpg",
-    },
-  ],
-  galleteria: [
-    {
-      id: "galletas-surtidas",
-      nombre: "Galletas surtidas",
-      precioDetal: 12000,
-      precioMayor: 10000,
-      tipo: "No perecedero",
-      imagen: "/categorias/galleteria.jpg",
-    },
-  ],
-  licores: [
-    {
-      id: "licor-surtido",
-      nombre: "Licor surtido",
-      precioDetal: 12000,
-      precioMayor: 10000,
-      tipo: "Bebida",
-      imagen: "/categorias/licores.jpg",
-    },
-  ],
-  reposteria: [
-    {
-      id: "insumo-reposteria",
-      nombre: "Insumo de repostería",
-      precioDetal: 12000,
-      precioMayor: 10000,
-      tipo: "No perecedero",
-      imagen: "/categorias/reposteria.jpg",
-    },
-  ],
-  servicios: [
-    {
-      id: "servicio-comercial",
-      nombre: "Servicio comercial",
-      precioDetal: 12000,
-      precioMayor: 10000,
-      tipo: "Servicio",
-      imagen: "/categorias/servicios.jpg",
-    },
-  ],
-  usados: [
-    {
-      id: "producto-segunda",
-      nombre: "Producto de segunda",
-      precioDetal: 12000,
-      precioMayor: 10000,
-      tipo: "Usado",
-      imagen: "/categorias/usados.jpg",
-    },
-  ],
-};
+const money = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0,
+});
 
 export default function CategoriaPage() {
   const { slug } = useParams();
-  const data = productos[slug] || [];
+  const category = getCategoryBySlug(slug);
+  const [productos, setProductos] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+
+    async function cargarProductos() {
+      try {
+        const productosQuery = query(
+          collection(db, "productos"),
+          where("categoria", "==", slug),
+          where("activo", "==", true)
+        );
+        const snapshot = await getDocs(productosQuery);
+        const data = snapshot.docs.map((docu) => ({
+          id: docu.id,
+          ...docu.data(),
+        }));
+
+        if (active) setProductos(data);
+      } catch (error) {
+        console.error("Error cargando productos por categoría:", error);
+        if (active) setProductos([]);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    if (slug) cargarProductos();
+
+    return () => {
+      active = false;
+    };
+  }, [slug]);
 
   return (
     <main style={{ padding: 40, fontFamily: "Arial" }}>
       <div
         style={{
           position: "relative",
-          height: 220,
-          borderRadius: 15,
+          height: 240,
+          borderRadius: 12,
           overflow: "hidden",
-          marginBottom: 40,
+          marginBottom: 34,
         }}
       >
         <Image
-          src={`/categorias/${slug}.jpg`}
-          alt={slug}
+          src={category?.imagen || "/categorias/carnicos.jpg"}
+          alt={category?.nombre || "Categoría"}
           fill
           style={{ objectFit: "cover" }}
         />
@@ -179,56 +75,78 @@ export default function CategoriaPage() {
           style={{
             position: "absolute",
             inset: 0,
-            background: "rgba(0,0,0,.5)",
+            background: "rgba(0,0,0,.48)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             color: "white",
-            fontSize: 32,
+            fontSize: 34,
             fontWeight: "bold",
-            textTransform: "capitalize",
+            textAlign: "center",
           }}
         >
-          {slug}
+          {category?.nombre || slug}
         </div>
       </div>
+
+      {loading && <p>Cargando productos...</p>}
+
+      {!loading && productos.length === 0 && (
+        <section
+          style={{
+            background: "#fff",
+            borderRadius: 8,
+            padding: 24,
+            border: "1px solid #e5e7eb",
+          }}
+        >
+          <h2>No hay productos publicados en esta categoría</h2>
+          <p>
+            Agrega productos desde el panel administrador y selecciona esta
+            categoría para que aparezcan aquí.
+          </p>
+        </section>
+      )}
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))",
+          gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))",
           gap: 25,
         }}
       >
-        {data.map((p) => (
-          <div
+        {productos.map((p) => (
+          <article
             key={p.id}
             style={{
-              border: "1px solid #eee",
-              borderRadius: 14,
+              border: "1px solid #e5e7eb",
+              borderRadius: 10,
               padding: 15,
               background: "white",
-              boxShadow: "0 5px 15px rgba(0,0,0,.08)",
+              boxShadow: "0 8px 22px rgba(0,0,0,.06)",
             }}
           >
-            <div style={{ position: "relative", height: 150 }}>
+            <div style={{ position: "relative", height: 170 }}>
               <Image
-                src={p.imagen}
-                alt={p.nombre}
+                src={getSafeImageSrc(p.imagen, category?.imagen)}
+                alt={p.nombre || "Producto"}
                 fill
-                style={{ objectFit: "cover", borderRadius: 10 }}
+                style={{ objectFit: "cover", borderRadius: 8 }}
+                unoptimized={isRemoteImage(p.imagen)}
               />
             </div>
 
-            <h3 style={{ marginTop: 10 }}>{p.nombre}</h3>
+            <h3 style={{ marginTop: 12 }}>{p.nombre}</h3>
+            <p>Detal: {money.format(p.precioDetal || 0)}</p>
+            <p>Mayor: {money.format(p.precioMayor || 0)}</p>
+            <p>Stock: {p.stock || 0}</p>
 
-            <p>Detal: ${p.precioDetal.toLocaleString()}</p>
-            <p>Mayor: ${p.precioMayor.toLocaleString()}</p>
-            <p>{p.tipo}</p>
             <AddToCart product={p} />
 
             <a
-              href={`https://wa.me/573249111150?text=Hola quiero comprar ${p.nombre}`}
+              href={`https://wa.me/573132752493?text=Hola quiero comprar ${encodeURIComponent(
+                p.nombre
+              )}`}
               target="_blank"
               style={{
                 display: "block",
@@ -242,9 +160,9 @@ export default function CategoriaPage() {
                 fontWeight: "bold",
               }}
             >
-              Comprar
+              Comprar por WhatsApp
             </a>
-          </div>
+          </article>
         ))}
       </div>
     </main>

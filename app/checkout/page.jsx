@@ -102,7 +102,7 @@ ${productosTexto}
 💵 TOTAL: $${data.factura.total.toLocaleString()}`
     );
 
-    window.open(`https://wa.me/573249111150?text=${mensaje}`, "_blank");
+    window.open(`https://wa.me/573132752493?text=${mensaje}`, "_blank");
   };
 
   /* ================= PAGO ONLINE ================= */
