@@ -6,9 +6,7 @@ import { CartProvider } from "./context/CartContext";
 export default function Providers({ children }) {
   return (
     <AuthProvider>
-      <CartProvider>
-        {children}
-      </CartProvider>
+      <CartProvider>{children}</CartProvider>
     </AuthProvider>
   );
 }

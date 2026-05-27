@@ -1,6 +1,6 @@
 import "./globals.css";
 
-import Providers from "./providers";
+import Providers from "./Providers";
 
 import Header from "./components/Header";
 import WhatsappButton from "./components/WhatsappButton";
