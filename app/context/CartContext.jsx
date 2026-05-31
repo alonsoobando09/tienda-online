@@ -30,11 +30,45 @@ export function CartProvider({ children }) {
     });
   }
 
+  function increaseQuantity(id) {
+    setCart((prev) =>
+      prev.map((p) =>
+        p.id === id ? { ...p, cantidad: (p.cantidad || 1) + 1 } : p
+      )
+    );
+  }
+
+  function decreaseQuantity(id) {
+    setCart((prev) =>
+      prev
+        .map((p) =>
+          p.id === id
+            ? { ...p, cantidad: Math.max((p.cantidad || 1) - 1, 0) }
+            : p
+        )
+        .filter((p) => (p.cantidad || 0) > 0)
+    );
+  }
+
+  function updateQuantity(id, cantidad) {
+    const nextQuantity = Math.max(Number(cantidad) || 0, 0);
+
+    setCart((prev) =>
+      prev
+        .map((p) => (p.id === id ? { ...p, cantidad: nextQuantity } : p))
+        .filter((p) => (p.cantidad || 0) > 0)
+    );
+  }
+
   /* =========================
   ELIMINAR
   ========================= */
   function removeFromCart(index) {
     setCart((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function removeFromCartById(id) {
+    setCart((prev) => prev.filter((p) => p.id !== id));
   }
 
   /* =========================
@@ -65,7 +99,11 @@ export function CartProvider({ children }) {
       value={{
         cart,
         addToCart,
+        increaseQuantity,
+        decreaseQuantity,
+        updateQuantity,
         removeFromCart,
+        removeFromCartById,
         clearCart,
         total,
         descuento,

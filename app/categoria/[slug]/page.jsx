@@ -6,7 +6,7 @@ import Image from "next/image";
 import AddToCart from "@/app/components/AddToCart";
 import { db } from "@/lib/firebase";
 import { getCategoryBySlug } from "@/lib/categories";
-import { getSafeImageSrc, isRemoteImage } from "@/lib/images";
+import { getSafeImageSrc } from "@/lib/images";
 import { collection, getDocs, query, where } from "firebase/firestore";
 
 const money = new Intl.NumberFormat("es-CO", {
@@ -126,15 +126,20 @@ export default function CategoriaPage() {
               boxShadow: "0 8px 22px rgba(0,0,0,.06)",
             }}
           >
-            <div style={{ position: "relative", height: 170 }}>
-              <Image
-                src={getSafeImageSrc(p.imagen, category?.imagen)}
-                alt={p.nombre || "Producto"}
-                fill
-                style={{ objectFit: "cover", borderRadius: 8 }}
-                unoptimized={isRemoteImage(p.imagen)}
-              />
-            </div>
+            <div
+              aria-label={p.nombre || "Producto"}
+              style={{
+                height: 170,
+                borderRadius: 8,
+                backgroundImage: `url("${getSafeImageSrc(
+                  p.imagen,
+                  category?.imagen
+                )}")`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                backgroundColor: "#f3f4f6",
+              }}
+            />
 
             <h3 style={{ marginTop: 12 }}>{p.nombre}</h3>
             <p>Detal: {money.format(p.precioDetal || 0)}</p>

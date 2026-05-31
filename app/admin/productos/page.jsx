@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
@@ -10,7 +9,7 @@ import { collection, deleteDoc, doc, getDocs } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { ImagePlus, Save, Trash2 } from "lucide-react";
 import { categories } from "@/lib/categories";
-import { getSafeImageSrc, isRemoteImage } from "@/lib/images";
+import { getSafeImageSrc } from "@/lib/images";
 
 const emptyForm = {
   nombre: "",
@@ -43,6 +42,7 @@ export default function ProductosAdminPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
+  const [localPreview, setLocalPreview] = useState("");
 
   async function cargarProductos() {
     setLoading(true);
@@ -98,6 +98,7 @@ export default function ProductosAdminPage() {
     try {
       setUploadMessage("");
       setUploading(true);
+      setLocalPreview(URL.createObjectURL(file));
 
       const safeName = `${Date.now()}-${file.name.replaceAll(" ", "-")}`;
       const storageRef = ref(storage, `productos/${safeName}`);
@@ -105,7 +106,7 @@ export default function ProductosAdminPage() {
       const url = await getDownloadURL(snapshot.ref);
 
       updateField("imagen", url);
-      setUploadMessage("Imagen subida correctamente.");
+      setUploadMessage("Imagen subida correctamente. Ya puedes guardar el producto.");
     } catch (error) {
       console.error("Error subiendo imagen:", error);
       setUploadMessage(
@@ -118,6 +119,12 @@ export default function ProductosAdminPage() {
 
   async function crearProducto(e) {
     e.preventDefault();
+
+    if (uploading) {
+      alert("Espera a que termine de subir la imagen antes de guardar.");
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -135,6 +142,7 @@ export default function ProductosAdminPage() {
 
       setForm(emptyForm);
       setUploadMessage("");
+      setLocalPreview("");
       await cargarProductos();
     } catch (error) {
       console.error("Error guardando producto:", error);
@@ -303,13 +311,32 @@ export default function ProductosAdminPage() {
 
             {form.imagen && (
               <div className="admin-image-preview">
-                <Image
-                  src={getSafeImageSrc(form.imagen)}
-                  alt={form.nombre || "Producto"}
-                  width={160}
-                  height={110}
-                  style={{ objectFit: "cover", borderRadius: 8 }}
-                  unoptimized={isRemoteImage(form.imagen)}
+                <div
+                  aria-label={form.nombre || "Producto"}
+                  style={{
+                    width: 160,
+                    height: 110,
+                    borderRadius: 8,
+                    backgroundImage: `url("${getSafeImageSrc(form.imagen)}")`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }}
+                />
+              </div>
+            )}
+
+            {!form.imagen && localPreview && (
+              <div className="admin-image-preview">
+                <div
+                  aria-label="Vista previa local"
+                  style={{
+                    width: 160,
+                    height: 110,
+                    borderRadius: 8,
+                    backgroundImage: `url("${localPreview}")`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }}
                 />
               </div>
             )}
@@ -320,7 +347,7 @@ export default function ProductosAdminPage() {
               </p>
             )}
 
-            <button className="admin-button" disabled={saving}>
+            <button className="admin-button" disabled={saving || uploading}>
               {uploading ? <ImagePlus size={18} /> : <Save size={18} />}
               {uploading
                 ? "Subiendo imagen..."
@@ -351,6 +378,7 @@ export default function ProductosAdminPage() {
             <table className="admin-table">
               <thead>
                 <tr>
+                  <th>Imagen</th>
                   <th>Producto</th>
                   <th>Categoría</th>
                   <th>Precios</th>
@@ -362,6 +390,22 @@ export default function ProductosAdminPage() {
               <tbody>
                 {productosFiltrados.map((producto) => (
                   <tr key={producto.id}>
+                    <td>
+                      <div
+                        aria-label={producto.nombre || "Producto"}
+                        style={{
+                          width: 64,
+                          height: 48,
+                          borderRadius: 8,
+                          backgroundImage: `url("${getSafeImageSrc(
+                            producto.imagen
+                          )}")`,
+                          backgroundSize: "cover",
+                          backgroundPosition: "center",
+                          border: "1px solid #e5e7eb",
+                        }}
+                      />
+                    </td>
                     <td>
                       <strong>{producto.nombre}</strong>
                       <br />

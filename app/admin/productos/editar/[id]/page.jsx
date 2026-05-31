@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
+import { categories } from "@/lib/categories";
+import { storage } from "@/lib/firebase";
+import { getSafeImageSrc } from "@/lib/images";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 
 export default function EditarProductoPage() {
   const { id } = useParams();
@@ -12,6 +16,8 @@ export default function EditarProductoPage() {
   const [producto, setProducto] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -38,8 +44,37 @@ export default function EditarProductoPage() {
     setProducto((current) => ({ ...current, [field]: value }));
   }
 
+  async function subirImagen(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploading(true);
+      setUploadMessage("");
+
+      const safeName = `${Date.now()}-${file.name.replaceAll(" ", "-")}`;
+      const storageRef = ref(storage, `productos/${safeName}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(snapshot.ref);
+
+      updateField("imagen", url);
+      setUploadMessage("Imagen actualizada. Guarda los cambios para aplicarla.");
+    } catch (error) {
+      console.error("Error subiendo imagen:", error);
+      setUploadMessage("No se pudo subir la imagen. Puedes pegar una URL manualmente.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
+
+    if (uploading) {
+      alert("Espera a que termine de subir la imagen antes de guardar.");
+      return;
+    }
+
     setSaving(true);
 
     const res = await fetch(`/api/productos/${id}`, {
@@ -84,10 +119,16 @@ export default function EditarProductoPage() {
 
               <label>
                 Categoría
-                <input
-                  value={producto.categoria || ""}
+                <select
+                  value={producto.categoria || "carnicos"}
                   onChange={(e) => updateField("categoria", e.target.value)}
-                />
+                >
+                  {categories.map((category) => (
+                    <option key={category.slug} value={category.slug}>
+                      {category.nombre}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <label>
@@ -152,12 +193,39 @@ export default function EditarProductoPage() {
               </label>
 
               <label>
+                Subir imagen
+                <input type="file" accept="image/*" onChange={subirImagen} />
+              </label>
+
+              <label style={{ gridColumn: "1 / -1" }}>
                 URL de imagen
                 <input
                   value={producto.imagen || ""}
                   onChange={(e) => updateField("imagen", e.target.value)}
                 />
               </label>
+
+              {producto.imagen && (
+                <div className="admin-image-preview">
+                  <div
+                    aria-label={producto.nombre || "Producto"}
+                    style={{
+                      width: 170,
+                      height: 120,
+                      borderRadius: 8,
+                      backgroundImage: `url("${getSafeImageSrc(producto.imagen)}")`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                    }}
+                  />
+                </div>
+              )}
+
+              {uploadMessage && (
+                <p className="admin-help" style={{ gridColumn: "1 / -1" }}>
+                  {uploadMessage}
+                </p>
+              )}
 
               <label>
                 Activo
@@ -179,8 +247,12 @@ export default function EditarProductoPage() {
                 />
               </label>
 
-              <button className="admin-button" disabled={saving}>
-                {saving ? "Guardando..." : "Guardar cambios"}
+              <button className="admin-button" disabled={saving || uploading}>
+                {uploading
+                  ? "Subiendo imagen..."
+                  : saving
+                    ? "Guardando..."
+                    : "Guardar cambios"}
               </button>
             </form>
           </section>
