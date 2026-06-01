@@ -9,6 +9,13 @@ import {
 } from "firebase/firestore";
 
 function normalizeProduct(body) {
+  const imagenes = Array.isArray(body.imagenes)
+    ? body.imagenes
+        .map((image) => String(image || "").trim())
+        .filter(Boolean)
+        .slice(0, 3)
+    : [];
+
   return {
     nombre: String(body.nombre || "").trim(),
     categoria: String(body.categoria || "general").trim(),
@@ -16,10 +23,14 @@ function normalizeProduct(body) {
     proveedor: String(body.proveedor || "").trim(),
     unidad: String(body.unidad || "unidad").trim(),
     imagen: String(body.imagen || "").trim(),
+    imagenes,
     descripcion: String(body.descripcion || "").trim(),
     costo: Number(body.costo) || 0,
     precioMayor: Number(body.precioMayor) || 0,
     precioDetal: Number(body.precioDetal) || 0,
+    precioPacaMayor: Number(body.precioPacaMayor) || 0,
+    precioPacaDetal: Number(body.precioPacaDetal) || 0,
+    unidadesPorPaca: Number(body.unidadesPorPaca) || 0,
     stock: Number(body.stock) || 0,
     stockMinimo: Number(body.stockMinimo) || 5,
     iva: Number(body.iva) || 0,

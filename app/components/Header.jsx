@@ -1,72 +1,35 @@
 "use client";
 
 import Link from "next/link";
+import { Menu, ShoppingCart, Store } from "lucide-react";
 import { useCart } from "@/app/context/CartContext";
 
 export default function Header() {
   const { cart } = useCart();
-
-  // Contar cantidades
-  const totalItems = cart.reduce(
-    (acc, p) => acc + (p.cantidad || 1),
-    0
-  );
+  const totalItems = cart.reduce((acc, p) => acc + (p.cantidad || 1), 0);
 
   return (
-    <header
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "15px 40px",
-        background: "#1B4332",
-        color: "white",
-      }}
-    >
-      {/* LOGO */}
-      <Link
-        href="/"
-        style={{
-          fontSize: 20,
-          fontWeight: "bold",
-          textDecoration: "none",
-          color: "white",
-        }}
-      >
-        🛒 Mi Proveedor Central
+    <header className="store-header">
+      <Link href="/" className="store-brand">
+        <Store size={22} />
+        <span>Proveedor Central</span>
       </Link>
 
-      {/* CARRITO */}
-      <Link
-        href="/carrito"
-        style={{
-          position: "relative",
-          textDecoration: "none",
-          color: "white",
-          fontSize: 18,
-        }}
-      >
-        🛒 Carrito
+      <nav className="store-nav" aria-label="Menu principal">
+        <Link href="/">Inicio</Link>
+        <Link href="/carrito" className="store-cart-link">
+          <ShoppingCart size={19} />
+          <span>Carrito</span>
+          {totalItems > 0 && <strong>{totalItems}</strong>}
+        </Link>
+      </nav>
 
-        {/* BURBUJA CONTADOR */}
-        {totalItems > 0 && (
-          <span
-            style={{
-              position: "absolute",
-              top: -8,
-              right: -12,
-              background: "#C5A059",
-              color: "#1B4332",
-              borderRadius: "50%",
-              padding: "2px 7px",
-              fontSize: 12,
-              fontWeight: "bold",
-            }}
-          >
-            {totalItems}
-          </span>
-        )}
+      <Link href="/carrito" className="store-mobile-cart" aria-label="Carrito">
+        <ShoppingCart size={21} />
+        {totalItems > 0 && <strong>{totalItems}</strong>}
       </Link>
+
+      <Menu className="store-mobile-menu-icon" size={22} aria-hidden="true" />
     </header>
   );
 }

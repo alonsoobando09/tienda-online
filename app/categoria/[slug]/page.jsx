@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import AddToCart from "@/app/components/AddToCart";
 import { db } from "@/lib/firebase";
 import { getCategoryBySlug } from "@/lib/categories";
@@ -126,9 +127,11 @@ export default function CategoriaPage() {
               boxShadow: "0 8px 22px rgba(0,0,0,.06)",
             }}
           >
-            <div
+            <Link
               aria-label={p.nombre || "Producto"}
+              href={`/productos/${p.id}`}
               style={{
+                display: "block",
                 height: 170,
                 borderRadius: 8,
                 backgroundImage: `url("${getSafeImageSrc(

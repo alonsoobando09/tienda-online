@@ -7,7 +7,14 @@ import AdminShell from "@/app/admin/components/AdminShell";
 import { categories } from "@/lib/categories";
 import { storage } from "@/lib/firebase";
 import { getSafeImageSrc } from "@/lib/images";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { uploadImageWithFallback } from "@/lib/clientImages";
+
+const imageSlots = [
+  { field: "imagen", label: "Imagen principal" },
+  { field: "gallery-0", label: "Imagen extra 1" },
+  { field: "gallery-1", label: "Imagen extra 2" },
+  { field: "gallery-2", label: "Imagen extra 3" },
+];
 
 export default function EditarProductoPage() {
   const { id } = useParams();
@@ -27,7 +34,14 @@ export default function EditarProductoPage() {
         const res = await fetch(`/api/productos/${id}`);
         if (!res.ok) throw new Error("Error al cargar producto");
         const data = await res.json();
-        if (active) setProducto(data);
+        if (active) {
+          setProducto({
+            ...data,
+            imagenes: Array.isArray(data.imagenes)
+              ? [...data.imagenes, "", "", ""].slice(0, 3)
+              : ["", "", ""],
+          });
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -44,7 +58,15 @@ export default function EditarProductoPage() {
     setProducto((current) => ({ ...current, [field]: value }));
   }
 
-  async function subirImagen(e) {
+  function updateGalleryImage(index, value) {
+    setProducto((current) => {
+      const imagenes = [...(current.imagenes || ["", "", ""])];
+      imagenes[index] = value;
+      return { ...current, imagenes };
+    });
+  }
+
+  async function subirImagen(e, slot = "imagen") {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -52,16 +74,19 @@ export default function EditarProductoPage() {
       setUploading(true);
       setUploadMessage("");
 
-      const safeName = `${Date.now()}-${file.name.replaceAll(" ", "-")}`;
-      const storageRef = ref(storage, `productos/${safeName}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(snapshot.ref);
+      const result = await uploadImageWithFallback(storage, file);
 
-      updateField("imagen", url);
-      setUploadMessage("Imagen actualizada. Guarda los cambios para aplicarla.");
+      if (slot === "imagen") {
+        updateField("imagen", result.url);
+      } else {
+        updateGalleryImage(Number(slot.replace("gallery-", "")), result.url);
+      }
+
+      setUploadMessage(`${result.message} Guarda los cambios para aplicarla.`);
     } catch (error) {
-      console.error("Error subiendo imagen:", error);
-      setUploadMessage("No se pudo subir la imagen. Puedes pegar una URL manualmente.");
+      setUploadMessage(
+        error?.message || "No se pudo procesar la imagen. Intenta con otra imagen."
+      );
     } finally {
       setUploading(false);
     }
@@ -175,6 +200,33 @@ export default function EditarProductoPage() {
               </label>
 
               <label>
+                Unidades por paca
+                <input
+                  type="number"
+                  value={producto.unidadesPorPaca ?? ""}
+                  onChange={(e) => updateField("unidadesPorPaca", e.target.value)}
+                />
+              </label>
+
+              <label>
+                Precio paca mayor
+                <input
+                  type="number"
+                  value={producto.precioPacaMayor ?? ""}
+                  onChange={(e) => updateField("precioPacaMayor", e.target.value)}
+                />
+              </label>
+
+              <label>
+                Precio paca detal
+                <input
+                  type="number"
+                  value={producto.precioPacaDetal ?? ""}
+                  onChange={(e) => updateField("precioPacaDetal", e.target.value)}
+                />
+              </label>
+
+              <label>
                 Stock
                 <input
                   type="number"
@@ -192,34 +244,48 @@ export default function EditarProductoPage() {
                 />
               </label>
 
-              <label>
-                Subir imagen
-                <input type="file" accept="image/*" onChange={subirImagen} />
-              </label>
+              <div className="admin-image-grid">
+                {imageSlots.map((slot) => {
+                  const galleryIndex = slot.field.startsWith("gallery-")
+                    ? Number(slot.field.replace("gallery-", ""))
+                    : -1;
+                  const value =
+                    slot.field === "imagen"
+                      ? producto.imagen || ""
+                      : producto.imagenes?.[galleryIndex] || "";
 
-              <label style={{ gridColumn: "1 / -1" }}>
-                URL de imagen
-                <input
-                  value={producto.imagen || ""}
-                  onChange={(e) => updateField("imagen", e.target.value)}
-                />
-              </label>
-
-              {producto.imagen && (
-                <div className="admin-image-preview">
-                  <div
-                    aria-label={producto.nombre || "Producto"}
-                    style={{
-                      width: 170,
-                      height: 120,
-                      borderRadius: 8,
-                      backgroundImage: `url("${getSafeImageSrc(producto.imagen)}")`,
-                      backgroundSize: "cover",
-                      backgroundPosition: "center",
-                    }}
-                  />
-                </div>
-              )}
+                  return (
+                    <div className="admin-image-slot" key={slot.field}>
+                      <label>
+                        {slot.label}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => subirImagen(e, slot.field)}
+                        />
+                      </label>
+                      <input
+                        placeholder="https://..."
+                        value={value}
+                        onChange={(e) =>
+                          slot.field === "imagen"
+                            ? updateField("imagen", e.target.value)
+                            : updateGalleryImage(galleryIndex, e.target.value)
+                        }
+                      />
+                      {value && (
+                        <div
+                          aria-label={slot.label}
+                          className="admin-thumb"
+                          style={{
+                            backgroundImage: `url("${getSafeImageSrc(value)}")`,
+                          }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
 
               {uploadMessage && (
                 <p className="admin-help" style={{ gridColumn: "1 / -1" }}>

@@ -36,7 +36,7 @@ export default function CarritoPage() {
         (p) =>
           `- ${p.nombre} x${p.cantidad} - ${money.format(
             (Number(p.precioDetal) || 0) * (p.cantidad || 1)
-          )}`
+          )} (${p.presentacion || "unidad"})`
       )
       .join("\n") +
       `\n\nSubtotal: ${money.format(total)}` +
@@ -77,8 +77,12 @@ export default function CarritoPage() {
                 <div>
                   <strong>{p.nombre}</strong>
                   <p style={{ margin: "6px 0 0" }}>
-                    {money.format(p.precioDetal || 0)} unidad
+                    {money.format(p.precioDetal || 0)}{" "}
+                    {p.presentacion === "paca" ? "por paca" : "por unidad"}
                   </p>
+                  {p.presentacion === "paca" && p.unidadesPorPaca > 0 && (
+                    <small>{p.unidadesPorPaca} unidades por paca</small>
+                  )}
                 </div>
 
                 <div style={quantityBox}>

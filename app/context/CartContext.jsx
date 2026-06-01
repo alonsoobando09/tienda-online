@@ -9,18 +9,29 @@ export function CartProvider({ children }) {
   /* =========================
   AGREGAR
   ========================= */
-  function addToCart(product) {
+  function addToCart(product, options = {}) {
     setCart((prev) => {
+      const presentacion = options.presentacion || product.presentacion || "unidad";
+      const precioBase =
+        options.precio ??
+        (presentacion === "paca"
+          ? product.precioPacaDetal || product.precioDetal || product.precio || 0
+          : product.precioDetal || product.precio || 0);
+      const cartId = `${product.id}-${presentacion}`;
       const normalized = {
         ...product,
-        precioDetal: Number(product.precioDetal || product.precio || 0),
+        id: cartId,
+        productoId: product.id,
+        presentacion,
+        unidadesPorPaca: Number(product.unidadesPorPaca || 0),
+        precioDetal: Number(precioBase || 0),
         precioMayor: Number(product.precioMayor || product.precioDetal || 0),
       };
-      const existe = prev.find((p) => p.id === normalized.id);
+      const existe = prev.find((p) => p.id === cartId);
 
       if (existe) {
         return prev.map((p) =>
-          p.id === normalized.id
+          p.id === cartId
             ? { ...p, cantidad: (p.cantidad || 1) + 1 }
             : p
         );

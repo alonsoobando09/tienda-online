@@ -6,10 +6,10 @@ import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
 import { db, storage } from "@/lib/firebase";
 import { collection, deleteDoc, doc, getDocs } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { ImagePlus, Save, Trash2 } from "lucide-react";
 import { categories } from "@/lib/categories";
 import { getSafeImageSrc } from "@/lib/images";
+import { uploadImageWithFallback } from "@/lib/clientImages";
 
 const emptyForm = {
   nombre: "",
@@ -18,15 +18,26 @@ const emptyForm = {
   proveedor: "",
   unidad: "unidad",
   imagen: "",
+  imagenes: ["", "", ""],
   descripcion: "",
   costo: "",
   precioMayor: "",
   precioDetal: "",
+  precioPacaMayor: "",
+  precioPacaDetal: "",
+  unidadesPorPaca: "",
   stock: "",
   stockMinimo: "5",
   iva: "0",
   activo: true,
 };
+
+const imageSlots = [
+  { field: "imagen", label: "Imagen principal" },
+  { field: "gallery-0", label: "Imagen extra 1" },
+  { field: "gallery-1", label: "Imagen extra 2" },
+  { field: "gallery-2", label: "Imagen extra 3" },
+];
 
 const money = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -43,6 +54,7 @@ export default function ProductosAdminPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const [localPreview, setLocalPreview] = useState("");
+  const [localGalleryPreviews, setLocalGalleryPreviews] = useState(["", "", ""]);
 
   async function cargarProductos() {
     setLoading(true);
@@ -91,26 +103,46 @@ export default function ProductosAdminPage() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  async function subirImagen(e) {
+  function updateGalleryImage(index, value) {
+    setForm((current) => {
+      const imagenes = [...(current.imagenes || ["", "", ""])];
+      imagenes[index] = value;
+      return { ...current, imagenes };
+    });
+  }
+
+  async function subirImagen(e, slot = "imagen") {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
       setUploadMessage("");
       setUploading(true);
-      setLocalPreview(URL.createObjectURL(file));
+      const preview = URL.createObjectURL(file);
 
-      const safeName = `${Date.now()}-${file.name.replaceAll(" ", "-")}`;
-      const storageRef = ref(storage, `productos/${safeName}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(snapshot.ref);
+      if (slot === "imagen") {
+        setLocalPreview(preview);
+      } else {
+        const index = Number(slot.replace("gallery-", ""));
+        setLocalGalleryPreviews((current) => {
+          const next = [...current];
+          next[index] = preview;
+          return next;
+        });
+      }
 
-      updateField("imagen", url);
-      setUploadMessage("Imagen subida correctamente. Ya puedes guardar el producto.");
+      const result = await uploadImageWithFallback(storage, file);
+
+      if (slot === "imagen") {
+        updateField("imagen", result.url);
+      } else {
+        updateGalleryImage(Number(slot.replace("gallery-", "")), result.url);
+      }
+
+      setUploadMessage(result.message);
     } catch (error) {
-      console.error("Error subiendo imagen:", error);
       setUploadMessage(
-        "No se pudo subir la imagen. Puedes guardar el producto sin imagen o pegar una URL."
+        error?.message || "No se pudo procesar la imagen. Intenta con otra imagen."
       );
     } finally {
       setUploading(false);
@@ -143,6 +175,7 @@ export default function ProductosAdminPage() {
       setForm(emptyForm);
       setUploadMessage("");
       setLocalPreview("");
+      setLocalGalleryPreviews(["", "", ""]);
       await cargarProductos();
     } catch (error) {
       console.error("Error guardando producto:", error);
@@ -246,6 +279,33 @@ export default function ProductosAdminPage() {
             </label>
 
             <label>
+              Unidades por paca
+              <input
+                type="number"
+                value={form.unidadesPorPaca}
+                onChange={(e) => updateField("unidadesPorPaca", e.target.value)}
+              />
+            </label>
+
+            <label>
+              Precio paca mayor
+              <input
+                type="number"
+                value={form.precioPacaMayor}
+                onChange={(e) => updateField("precioPacaMayor", e.target.value)}
+              />
+            </label>
+
+            <label>
+              Precio paca detal
+              <input
+                type="number"
+                value={form.precioPacaDetal}
+                onChange={(e) => updateField("precioPacaDetal", e.target.value)}
+              />
+            </label>
+
+            <label>
               Stock
               <input
                 type="number"
@@ -286,19 +346,54 @@ export default function ProductosAdminPage() {
               />
             </label>
 
-            <label>
-              Subir imagen
-              <input type="file" accept="image/*" onChange={subirImagen} />
-            </label>
+            <div className="admin-image-grid">
+              {imageSlots.map((slot) => {
+                const galleryIndex = slot.field.startsWith("gallery-")
+                  ? Number(slot.field.replace("gallery-", ""))
+                  : -1;
+                const value =
+                  slot.field === "imagen"
+                    ? form.imagen
+                    : form.imagenes?.[galleryIndex] || "";
+                const preview =
+                  slot.field === "imagen"
+                    ? localPreview
+                    : localGalleryPreviews[galleryIndex];
 
-            <label style={{ gridColumn: "1 / -1" }}>
-              URL de imagen
-              <input
-                placeholder="https://..."
-                value={form.imagen}
-                onChange={(e) => updateField("imagen", e.target.value)}
-              />
-            </label>
+                return (
+                  <div className="admin-image-slot" key={slot.field}>
+                    <label>
+                      {slot.label}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => subirImagen(e, slot.field)}
+                      />
+                    </label>
+                    <input
+                      placeholder="https://..."
+                      value={value}
+                      onChange={(e) =>
+                        slot.field === "imagen"
+                          ? updateField("imagen", e.target.value)
+                          : updateGalleryImage(galleryIndex, e.target.value)
+                      }
+                    />
+                    {(value || preview) && (
+                      <div
+                        aria-label={slot.label}
+                        className="admin-thumb"
+                        style={{
+                          backgroundImage: `url("${
+                            value ? getSafeImageSrc(value) : preview
+                          }")`,
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
 
             <label style={{ gridColumn: "1 / -1" }}>
               Descripción
@@ -308,38 +403,6 @@ export default function ProductosAdminPage() {
                 onChange={(e) => updateField("descripcion", e.target.value)}
               />
             </label>
-
-            {form.imagen && (
-              <div className="admin-image-preview">
-                <div
-                  aria-label={form.nombre || "Producto"}
-                  style={{
-                    width: 160,
-                    height: 110,
-                    borderRadius: 8,
-                    backgroundImage: `url("${getSafeImageSrc(form.imagen)}")`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                  }}
-                />
-              </div>
-            )}
-
-            {!form.imagen && localPreview && (
-              <div className="admin-image-preview">
-                <div
-                  aria-label="Vista previa local"
-                  style={{
-                    width: 160,
-                    height: 110,
-                    borderRadius: 8,
-                    backgroundImage: `url("${localPreview}")`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                  }}
-                />
-              </div>
-            )}
 
             {uploadMessage && (
               <p className="admin-help" style={{ gridColumn: "1 / -1" }}>
@@ -421,6 +484,15 @@ export default function ProductosAdminPage() {
                       Mayor: {money.format(producto.precioMayor || 0)}
                       <br />
                       Detal: {money.format(producto.precioDetal || 0)}
+                      {producto.unidadesPorPaca > 0 && (
+                        <>
+                          <br />
+                          Paca:{" "}
+                          {money.format(
+                            producto.precioPacaDetal || producto.precioDetal || 0
+                          )}
+                        </>
+                      )}
                     </td>
                     <td>
                       <span className="admin-pill">{producto.stock || 0}</span>

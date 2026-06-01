@@ -3,9 +3,10 @@
 import { Minus, Plus, ShoppingCart } from "lucide-react";
 import { useCart } from "../context/CartContext";
 
-export default function AddToCart({ product }) {
+export default function AddToCart({ product, presentacion = "unidad", precio }) {
   const { cart, addToCart, decreaseQuantity, increaseQuantity } = useCart();
-  const item = cart.find((p) => p.id === product.id);
+  const cartId = `${product.id}-${presentacion}`;
+  const item = cart.find((p) => p.id === cartId);
 
   if (item) {
     return (
@@ -20,7 +21,7 @@ export default function AddToCart({ product }) {
       >
         <button
           aria-label="Disminuir cantidad"
-          onClick={() => decreaseQuantity(product.id)}
+          onClick={() => decreaseQuantity(cartId)}
           style={qtyButton}
         >
           <Minus size={16} />
@@ -30,7 +31,7 @@ export default function AddToCart({ product }) {
 
         <button
           aria-label="Aumentar cantidad"
-          onClick={() => increaseQuantity(product.id)}
+          onClick={() => increaseQuantity(cartId)}
           style={qtyButton}
         >
           <Plus size={16} />
@@ -40,7 +41,10 @@ export default function AddToCart({ product }) {
   }
 
   return (
-    <button onClick={() => addToCart(product)} style={addButton}>
+    <button
+      onClick={() => addToCart(product, { presentacion, precio })}
+      style={addButton}
+    >
       <ShoppingCart size={17} />
       Agregar
     </button>
