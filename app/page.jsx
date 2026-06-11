@@ -7,7 +7,7 @@ import { ArrowRight, BadgePercent, MapPin, PackageCheck, Truck } from "lucide-re
 import { categories } from "@/lib/categories";
 
 const benefits = [
-  { label: "Envios en Bogota", icon: Truck },
+  { label: "Envios a Bogota y a Nivel Nacional", icon: Truck },
   { label: "Descuentos mayoristas", icon: BadgePercent },
   { label: "Unidad, caja, paca o bulto", icon: PackageCheck },
   { label: "Pedidos rapidos por zona", icon: MapPin },
