@@ -52,12 +52,15 @@ export default function Header() {
           <Link href="/#categorias" onClick={closeMenu}>
             Categorias
           </Link>
-          <Link href="/carrito" onClick={closeMenu}>
-            Carrito
-          </Link>
-          <Link href="/login" onClick={closeMenu}>
-            Admin
-          </Link>
+        <Link href="/carrito" onClick={closeMenu}>
+          Carrito
+        </Link>
+        <Link href="/carterista" onClick={closeMenu}>
+          Carterista
+        </Link>
+        <Link href="/login" onClick={closeMenu}>
+          Admin
+        </Link>
         </nav>
       )}
     </header>

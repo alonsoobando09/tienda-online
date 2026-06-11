@@ -8,15 +8,19 @@ import {
   Calculator,
   FileText,
   Home,
+  Map,
   Package,
   Receipt,
   ShoppingCart,
+  UserRoundPlus,
   Users,
 } from "lucide-react";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: BarChart3 },
   { href: "/admin/productos", label: "Productos", icon: Package },
+  { href: "/admin/clientes", label: "Clientes", icon: UserRoundPlus },
+  { href: "/admin/rutas", label: "Rutas", icon: Map },
   { href: "/admin/inventario", label: "Inventario", icon: Boxes },
   { href: "/admin/pedidos", label: "Pedidos", icon: ShoppingCart },
   { href: "/admin/facturas", label: "Facturas", icon: FileText },
