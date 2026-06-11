@@ -7,7 +7,7 @@
 body {
   margin: 0;
   font-family: Inter, Arial, sans-serif;
-  background: #eef3ef;
+  background: #f4f0e8;
   color: #16231d;
 }
 
@@ -30,8 +30,13 @@ button:hover {
   align-items: center;
   gap: 16px;
   padding: 14px 34px;
-  background: #1b4332;
+  background: #062015;
   color: #fff;
+  box-shadow: 0 12px 30px rgba(3, 18, 12, .18);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  isolation: isolate;
 }
 
 .store-brand,
@@ -81,8 +86,278 @@ button:hover {
 }
 
 .store-mobile-cart,
-.store-mobile-menu-icon {
+.store-mobile-menu-button {
   display: none;
+}
+
+.store-mobile-menu-button {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  padding: 6px;
+}
+
+.store-mobile-menu {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: calc(100% + 8px);
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  background: rgba(6, 32, 21, .98);
+  border: 1px solid rgba(214,177,96,.24);
+  border-radius: 8px;
+  box-shadow: 0 18px 42px rgba(0,0,0,.22);
+}
+
+.store-mobile-menu a {
+  padding: 12px;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 800;
+}
+
+.store-mobile-menu a:hover {
+  background: rgba(214,177,96,.14);
+}
+
+.home-page {
+  min-height: 100vh;
+  background: #f4f0e8;
+}
+
+.home-hero {
+  position: relative;
+  min-height: 620px;
+  display: grid;
+  place-items: center;
+  padding: 56px 22px 72px;
+  overflow: hidden;
+  background: #15110d;
+}
+
+.home-hero-media {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(16, 13, 9, .92), rgba(16, 13, 9, .58)),
+    url("/categorias/carnicos.jpg") center / cover;
+  transform: scale(1.02);
+}
+
+.home-hero-overlay {
+  position: absolute;
+  inset: auto 0 0;
+  height: 42%;
+  background: linear-gradient(180deg, transparent, #f4f0e8);
+}
+
+.home-admin-link {
+  position: absolute;
+  top: 26px;
+  right: min(42px, 6vw);
+  z-index: 2;
+  background: rgba(8, 8, 8, .82);
+  color: #fff;
+  padding: 11px 18px;
+  border-radius: 8px;
+  font-weight: 900;
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow: 0 10px 28px rgba(0,0,0,.24);
+}
+
+.home-hero-content {
+  position: relative;
+  z-index: 1;
+  width: min(880px, 100%);
+  margin: 0 auto;
+  text-align: center;
+  color: #fff;
+}
+
+.home-eyebrow {
+  margin: 0 0 10px;
+  color: #d6b160;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.home-hero h1 {
+  margin: 0;
+  font-size: clamp(42px, 7vw, 82px);
+  line-height: .98;
+  letter-spacing: 0;
+}
+
+.home-hero-content > p:not(.home-eyebrow) {
+  max-width: 680px;
+  margin: 22px auto 0;
+  color: rgba(255,255,255,.9);
+  font-size: 20px;
+  line-height: 1.45;
+}
+
+.home-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 34px;
+}
+
+.home-button {
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 14px 22px;
+  font-weight: 900;
+  box-shadow: 0 14px 30px rgba(0,0,0,.18);
+}
+
+.home-button.primary {
+  background: #f7f2e8;
+  color: #10251e;
+}
+
+.home-button.whatsapp {
+  background: #0a7d35;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.24);
+}
+
+.home-benefits {
+  position: relative;
+  z-index: 2;
+  width: min(1120px, calc(100% - 36px));
+  margin: -48px auto 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.home-benefit-card {
+  min-height: 96px;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 18px;
+  text-align: center;
+  background: #062015;
+  color: #d6b160;
+  border-radius: 8px;
+  box-shadow: 0 18px 44px rgba(9, 30, 22, .18);
+  border: 1px solid rgba(214,177,96,.18);
+  font-weight: 900;
+}
+
+.home-categories {
+  padding: 58px 28px 68px;
+}
+
+.home-section-heading {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.home-section-heading h2 {
+  margin: 0;
+  color: #17211d;
+  font-size: clamp(28px, 4vw, 42px);
+}
+
+.home-category-grid {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 18px;
+}
+
+.home-category-link {
+  display: block;
+}
+
+.home-category-card {
+  position: relative;
+  min-height: 220px;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 18px 38px rgba(27, 35, 30, .14);
+  background: #10251e;
+}
+
+.home-category-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 35%, rgba(0,0,0,.78));
+}
+
+.home-category-card div {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 1;
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  color: #fff;
+}
+
+.home-category-card strong {
+  font-size: 18px;
+}
+
+.home-category-card span {
+  color: #d6b160;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.home-footer {
+  padding: 28px;
+  text-align: center;
+  background: #062015;
+  color: #d6b160;
+  font-weight: 700;
+}
+
+.floating-whatsapp,
+.floating-pos {
+  position: fixed;
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 14px 32px rgba(0,0,0,.24);
+}
+
+.floating-whatsapp {
+  right: 20px;
+  bottom: 22px;
+  width: 58px;
+  height: 58px;
+  border-radius: 999px;
+  background: #078d38;
+  color: #fff;
+}
+
+.floating-pos {
+  left: 20px;
+  bottom: 22px;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  background: #1f2422;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .admin-shell {
@@ -530,9 +805,105 @@ button:hover {
   }
 
   .store-mobile-cart,
-  .store-mobile-menu-icon {
+  .store-mobile-menu-button {
     display: inline-flex;
     flex: 0 0 auto;
+  }
+
+  .home-hero {
+    min-height: 580px;
+    align-items: center;
+    padding: 62px 18px 84px;
+  }
+
+  .home-hero-media {
+    background:
+      linear-gradient(180deg, rgba(10, 9, 7, .78), rgba(10, 9, 7, .86)),
+      url("/categorias/carnicos.jpg") center / cover;
+  }
+
+  .home-admin-link {
+    top: 18px;
+    right: 16px;
+    padding: 10px 15px;
+  }
+
+  .home-hero h1 {
+    font-size: clamp(44px, 15vw, 58px);
+  }
+
+  .home-hero-content > p:not(.home-eyebrow) {
+    font-size: 18px;
+    line-height: 1.38;
+    margin-top: 18px;
+  }
+
+  .home-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: min(340px, 100%);
+    margin: 28px auto 0;
+  }
+
+  .home-button {
+    width: 100%;
+    min-height: 54px;
+    padding: 13px 16px;
+  }
+
+  .home-benefits {
+    width: calc(100% - 28px);
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: -38px;
+  }
+
+  .home-benefit-card {
+    min-height: 76px;
+    grid-template-columns: auto 1fr;
+    justify-items: start;
+    text-align: left;
+    padding: 16px 18px;
+  }
+
+  .home-categories {
+    padding: 42px 14px 86px;
+  }
+
+  .home-category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .home-category-card {
+    min-height: 158px;
+  }
+
+  .home-category-card div {
+    padding: 12px;
+  }
+
+  .home-category-card strong {
+    font-size: 15px;
+  }
+
+  .home-category-card span {
+    font-size: 12px;
+  }
+
+  .floating-whatsapp {
+    right: 14px;
+    bottom: 18px;
+    width: 54px;
+    height: 54px;
+  }
+
+  .floating-pos {
+    left: 14px;
+    bottom: 20px;
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 14px;
   }
 
   .admin-shell {

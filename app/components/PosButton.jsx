@@ -1,28 +1,16 @@
 "use client";
 
-export default function PosButton() {
+import { ReceiptText } from "lucide-react";
 
-  const activarPOS = () => {
+export default function PosButton() {
+  function activarPOS() {
     document.documentElement.requestFullscreen();
-  };
+  }
 
   return (
-    <button
-      onClick={activarPOS}
-      style={{
-        position: "fixed",
-        bottom: 20,
-        left: 20,
-        zIndex: 999,
-        background: "#111",
-        color: "#fff",
-        border: "none",
-        padding: "12px 18px",
-        borderRadius: 10,
-        cursor: "pointer",
-      }}
-    >
-      🧾 Modo POS
+    <button className="floating-pos" onClick={activarPOS} type="button">
+      <ReceiptText size={18} />
+      <span>Modo POS</span>
     </button>
   );
 }

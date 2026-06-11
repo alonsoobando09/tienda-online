@@ -1,184 +1,87 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
 import { motion } from "framer-motion";
+import { ArrowRight, BadgePercent, MapPin, PackageCheck, Truck } from "lucide-react";
 import { categories } from "@/lib/categories";
+
+const benefits = [
+  { label: "Envios en Bogota", icon: Truck },
+  { label: "Descuentos mayoristas", icon: BadgePercent },
+  { label: "Unidad, caja, paca o bulto", icon: PackageCheck },
+  { label: "Pedidos rapidos por zona", icon: MapPin },
+];
 
 export default function HomePage() {
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#f7f3ea",
-        fontFamily: "Arial",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          padding: "20px 40px",
-        }}
-      >
-        <Link
-          href="/login"
-          style={{
-            background: "#111",
-            color: "white",
-            padding: "10px 18px",
-            borderRadius: "8px",
-            textDecoration: "none",
-            fontWeight: "bold",
-            fontSize: "14px",
-          }}
-        >
+    <main className="home-page">
+      <section className="home-hero">
+        <div className="home-hero-media" />
+        <div className="home-hero-overlay" />
+
+        <Link className="home-admin-link" href="/login">
           Admin
         </Link>
-      </div>
 
-      <section style={{ padding: "74px 40px", textAlign: "center" }}>
-        <h1 style={{ fontSize: "42px", color: "#2D2926", marginBottom: 20 }}>
-          Mi Proveedor Central
-        </h1>
+        <div className="home-hero-content">
+          <p className="home-eyebrow">Central mayorista online</p>
+          <h1>Mi Proveedor Central</h1>
+          <p>
+            Compra facil al detal y al por mayor. Categorias organizadas,
+            pedidos por WhatsApp, checkout online y panel administrativo.
+          </p>
 
-        <p
-          style={{
-            fontSize: 18,
-            color: "#2D2926",
-            maxWidth: 820,
-            margin: "0 auto",
-          }}
-        >
-          Ventas al detal y al por mayor. Productos organizados por categoría,
-          pedidos por WhatsApp, checkout online y panel administrativo.
-        </p>
+          <div className="home-actions">
+            <Link className="home-button primary" href="#categorias">
+              Ver productos
+              <ArrowRight size={18} />
+            </Link>
 
-        <div style={{ marginTop: 36 }}>
-          <Link
-            href="#categorias"
-            style={{
-              padding: "14px 30px",
-              background: "#1B4332",
-              color: "#F2F2F2",
-              borderRadius: "8px",
-              fontWeight: "bold",
-              textDecoration: "none",
-              marginRight: 14,
-            }}
-          >
-            Ver productos
-          </Link>
-
-          <Link
-            href="https://wa.me/573132752493"
-            style={{
-              padding: "14px 30px",
-              border: "2px solid #1B4332",
-              color: "#2D2926",
-              borderRadius: "8px",
-              fontWeight: "bold",
-              textDecoration: "none",
-              background: "#25d366",
-            }}
-          >
-            Comprar al por mayor
-          </Link>
+            <Link className="home-button whatsapp" href="https://wa.me/573132752493">
+              Comprar al por mayor
+            </Link>
+          </div>
         </div>
       </section>
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: 18,
-          padding: 40,
-          background: "#ecf2e9",
-        }}
-      >
-        {[
-          "Envíos en Bogotá",
-          "Descuentos mayoristas",
-          "Unidad, caja, paca o bulto",
-          "Pago contra entrega",
-        ].map((txt) => (
-          <div
-            key={txt}
-            style={{
-              background: "#1B4332",
-              padding: 20,
-              borderRadius: 8,
-              textAlign: "center",
-              fontWeight: "bold",
-              color: "#C5A059",
-            }}
-          >
-            {txt}
-          </div>
-        ))}
+      <section className="home-benefits" aria-label="Beneficios">
+        {benefits.map((benefit) => {
+          const Icon = benefit.icon;
+
+          return (
+            <div className="home-benefit-card" key={benefit.label}>
+              <Icon size={21} />
+              <span>{benefit.label}</span>
+            </div>
+          );
+        })}
       </section>
 
-      <section id="categorias" style={{ padding: "60px 40px" }}>
-        <h2
-          style={{
-            textAlign: "center",
-            color: "#2D2926",
-            marginBottom: 38,
-          }}
-        >
-          Categorías
-        </h2>
+      <section className="home-categories" id="categorias">
+        <div className="home-section-heading">
+          <p className="home-eyebrow">Catalogo</p>
+          <h2>Categorias principales</h2>
+        </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-            gap: 25,
-            maxWidth: 1200,
-            margin: "0 auto",
-          }}
-        >
+        <div className="home-category-grid">
           {categories.map((cat) => (
-            <Link
-              key={cat.slug}
-              href={`/categoria/${cat.slug}`}
-              style={{ textDecoration: "none" }}
-            >
+            <Link className="home-category-link" href={`/categoria/${cat.slug}`} key={cat.slug}>
               <motion.div
-                whileHover={{ scale: 1.03 }}
+                className="home-category-card"
+                whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                style={{
-                  position: "relative",
-                  height: 220,
-                  borderRadius: 10,
-                  overflow: "hidden",
-                  cursor: "pointer",
-                  boxShadow: "0 10px 28px rgba(27,67,50,.18)",
-                }}
               >
                 <Image
                   src={cat.imagen}
                   alt={cat.nombre}
                   fill
-                  style={{
-                    objectFit: "cover",
-                    transition: "transform .5s",
-                  }}
+                  sizes="(max-width: 700px) 50vw, (max-width: 1100px) 33vw, 25vw"
+                  style={{ objectFit: "cover" }}
                 />
-
-                <div
-                  style={{
-                    position: "absolute",
-                    bottom: 0,
-                    width: "100%",
-                    padding: 14,
-                    background:
-                      "linear-gradient(to top, rgba(0,0,0,.82), transparent)",
-                    color: "white",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {cat.nombre}
+                <div>
+                  <strong>{cat.nombre}</strong>
+                  <span>Ver productos</span>
                 </div>
               </motion.div>
             </Link>
@@ -186,16 +89,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      <footer
-        style={{
-          padding: 30,
-          textAlign: "center",
-          background: "#1A1A1A",
-          color: "#C5A059",
-        }}
-      >
-        © {new Date().getFullYear()} Mi Proveedor Central · Ventas al detal y al
-        por mayor
+      <footer className="home-footer">
+        {new Date().getFullYear()} Mi Proveedor Central. Ventas al detal y al por
+        mayor.
       </footer>
     </main>
   );
