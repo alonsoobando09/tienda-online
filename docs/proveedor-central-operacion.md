@@ -145,6 +145,10 @@ Despacho:
 - Puede hacerse con pistola/lector de codigo de barras.
 - Tambien puede hacerse desde tablet o celular buscando productos.
 - Cada despacho queda asociado a fecha, ruta, carterista y ayudante.
+- El despacho descuenta inventario cuando se guarda.
+- Cada salida genera movimiento de kardex.
+- El despacho conserva costo/base del producto y valor estimado de venta.
+- Debe servir como punto de comparacion para la recepcion nocturna.
 
 Recibo al final del dia:
 
@@ -155,6 +159,16 @@ Recibo al final del dia:
   - Lo que se vendio de contado.
   - Lo que se devolvio a bodega.
   - Lo que falta o sobra.
+- La recepcion nocturna devuelve inventario automaticamente a bodega.
+- Los productos dejados quedan como valor base/facturado del dia.
+- Los productos dejados pueden cargarse automaticamente desde las facturas de
+  ruta guardadas por el carterista.
+- La recepcion muestra cantidad de facturas, valor facturado, pagos de productos
+  del dia y fiado de la ruta.
+- Se registra dinero entregado, gastos de ruta y prestamos.
+- Se calcula descuadre de dinero comparando plata entregada + gastos/prestamos
+  contra valor de productos dejados.
+- Los faltantes de producto quedan separados de los descuadres de plata.
 
 ## Ruta diaria
 
@@ -184,6 +198,12 @@ Al confirmar una venta o fiado:
 - Debe incluir nombre, telefono, fecha, ruta, productos, cantidades, precios,
   abono, deuda anterior, total nuevo y mensaje final:
   "Muchas gracias por su compra".
+- En modo carterista, la factura se guarda como factura de ruta.
+- El carterista puede seleccionar productos con precio minimo, sugerido o maximo.
+- El sistema calcula total de productos dejados, pago del dia, fiado del dia y
+  deuda final.
+- Al guardar la factura, se actualiza la deuda del cliente.
+- Desde la factura guardada se abre WhatsApp con el resumen para el cliente.
 
 ## Liquidacion diaria
 
@@ -211,6 +231,57 @@ Reglas de pago:
 - Al carterista se le descuentan aparte prestamos, almuerzos, consumos o faltantes.
 - Al ayudante se le descuentan aparte prestamos, almuerzos o productos consumidos.
 - Todo debe quedar separado por dia, sin mezclar liquidaciones.
+- La liquidacion parte de una recepcion nocturna ya guardada.
+- La utilidad bruta se calcula con valor de productos dejados menos costo de
+  productos dejados.
+- El costo de faltantes y descuadres negativos se descuentan al carterista.
+- Al guardar liquidacion, la recepcion queda marcada como liquidada para evitar
+  mezclar dias.
+
+## Reportes semanales
+
+El reporte semanal consolida las liquidaciones ya guardadas.
+
+Debe permitir filtrar por:
+
+- Fecha inicial.
+- Fecha final.
+- Carterista.
+
+Debe mostrar:
+
+- Dias trabajados.
+- Rutas liquidadas.
+- Valor total de productos dejados.
+- Utilidad bruta.
+- Pago neto de carteristas.
+- Pago neto de ayudantes.
+- Neto del administrador.
+- Facturas de ruta.
+- Descuadres de dinero.
+- Faltantes de productos.
+
+Resumen por carterista:
+
+- Dias trabajados.
+- Rutas trabajadas.
+- Productos dejados.
+- Utilidad bruta.
+- Neto a pagar.
+- Descuentos acumulados.
+- Alertas por descuadres o faltantes.
+
+Detalle diario:
+
+- Fecha.
+- Dia de ruta.
+- Ruta.
+- Carterista.
+- Ayudante.
+- Productos dejados.
+- Utilidad.
+- Descuadre.
+- Neto del carterista.
 
 ## Dashboard administrador
 
