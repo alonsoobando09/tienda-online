@@ -41,6 +41,7 @@ Cada cliente debe tener:
 - Direccion.
 - Dia de ruta.
 - Ruta asignada.
+- Numero/orden de visita dentro de la ruta.
 - Carterista asignado.
 - Estado de deuda.
 - Fecha de ultima deuda.
@@ -49,6 +50,53 @@ Cada cliente debe tener:
 - Abonos.
 - Observaciones.
 - Solicitud de borrado pendiente o no.
+
+## Orden de visita por ruta
+
+Cada ruta debe manejar clientes en un orden numerado y consecutivo.
+
+Ejemplo:
+
+- Cliente 1.
+- Cliente 2.
+- Cliente 3.
+- Cliente 4.
+
+Reglas:
+
+- Cada cliente tiene un numero de visita dentro de su ruta y dia.
+- El orden se puede cambiar desde el administrador.
+- El carterista debe ver los clientes ordenados por ese numero.
+- Si se agrega un cliente al final, recibe automaticamente el siguiente numero.
+- Si se agrega un cliente en medio de la ruta, el sistema debe reordenar todos
+  los clientes siguientes.
+
+Ejemplo real:
+
+- Santiago esta en el numero 6.
+- Se agrega Camila justo debajo de Santiago porque trabaja en el mismo local.
+- Camila queda como numero 7.
+- El cliente que antes era numero 7 pasa automaticamente a numero 8.
+- El que era 8 pasa a 9, y asi sucesivamente.
+- Si la ruta tenia 200 clientes, despues de agregar a Camila queda con 201
+  clientes numerados correctamente.
+
+El sistema debe permitir:
+
+- Insertar cliente antes de otro cliente.
+- Insertar cliente despues de otro cliente.
+- Mover cliente hacia arriba o hacia abajo.
+- Cambiar numero manualmente desde administrador.
+- Recalcular la numeracion completa de la ruta.
+- Mantener la deuda e historial del cliente aunque cambie su numero de visita.
+
+Importante:
+
+- El numero de visita pertenece a la ruta, no a la deuda.
+- Cambiar el orden no debe alterar facturas, abonos ni historial.
+- El carterista no puede reorganizar toda la ruta sin autorizacion.
+- El carterista si puede agregar un cliente nuevo del dia, pero si lo inserta en
+  medio de la ruta debe quedar marcado para revision del administrador.
 
 Semaforo de deuda:
 
