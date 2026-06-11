@@ -9,7 +9,7 @@ import { categories } from "@/lib/categories";
 const benefits = [
   { label: "Envios a Bogota y a Nivel Nacional", icon: Truck },
   { label: "Descuentos mayoristas", icon: BadgePercent },
-  { label: "Unidad, caja, paca o bulto", icon: PackageCheck },
+  { label: "Unidad, docena, pacas, cantidad", icon: PackageCheck },
   { label: "Pedidos rapidos por zona", icon: MapPin },
 ];
 
