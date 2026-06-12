@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -21,24 +22,40 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { href: "/admin", label: "Dashboard", icon: BarChart3 },
-  { href: "/admin/productos", label: "Productos", icon: Package },
-  { href: "/admin/clientes", label: "Clientes", icon: UserRoundPlus },
-  { href: "/admin/rutas", label: "Rutas", icon: Map },
-  { href: "/admin/despachos", label: "Despachos", icon: PackageCheck },
-  { href: "/admin/recepciones", label: "Recepcion", icon: PackageOpen },
-  { href: "/admin/liquidaciones", label: "Liquidacion", icon: HandCoins },
-  { href: "/admin/reportes", label: "Reportes", icon: ClipboardList },
-  { href: "/admin/inventario", label: "Inventario", icon: Boxes },
-  { href: "/admin/pedidos", label: "Pedidos", icon: ShoppingCart },
-  { href: "/admin/facturas", label: "Facturas", icon: FileText },
-  { href: "/admin/ventas", label: "Ventas", icon: Receipt },
-  { href: "/admin/contabilidad", label: "Contable", icon: Calculator },
-  { href: "/admin/empleados", label: "Empleados", icon: Users },
+  { href: "/admin", label: "Dashboard", icon: BarChart3, roles: ["admin"] },
+  { href: "/admin/productos", label: "Productos", icon: Package, roles: ["admin"] },
+  { href: "/admin/clientes", label: "Clientes", icon: UserRoundPlus, roles: ["admin"] },
+  { href: "/admin/rutas", label: "Rutas", icon: Map, roles: ["admin"] },
+  {
+    href: "/admin/despachos",
+    label: "Despachos",
+    icon: PackageCheck,
+    roles: ["admin", "bodega"],
+  },
+  {
+    href: "/admin/recepciones",
+    label: "Recepcion",
+    icon: PackageOpen,
+    roles: ["admin", "bodega"],
+  },
+  { href: "/admin/liquidaciones", label: "Liquidacion", icon: HandCoins, roles: ["admin"] },
+  { href: "/admin/reportes", label: "Reportes", icon: ClipboardList, roles: ["admin"] },
+  { href: "/admin/inventario", label: "Inventario", icon: Boxes, roles: ["admin", "bodega"] },
+  { href: "/admin/pedidos", label: "Pedidos", icon: ShoppingCart, roles: ["admin"] },
+  { href: "/admin/facturas", label: "Facturas", icon: FileText, roles: ["admin"] },
+  { href: "/admin/ventas", label: "Ventas", icon: Receipt, roles: ["admin"] },
+  { href: "/admin/contabilidad", label: "Contable", icon: Calculator, roles: ["admin"] },
+  { href: "/admin/empleados", label: "Empleados", icon: Users, roles: ["admin"] },
 ];
 
 export default function AdminShell({ title, subtitle, actions, children }) {
   const pathname = usePathname();
+  const [role] = useState(() => {
+    if (typeof window === "undefined") return "admin";
+    return localStorage.getItem("userRole") || "admin";
+  });
+
+  const visibleNavItems = navItems.filter((item) => item.roles.includes(role));
 
   return (
     <div className="admin-shell">
@@ -52,7 +69,7 @@ export default function AdminShell({ title, subtitle, actions, children }) {
         </div>
 
         <nav className="admin-nav" aria-label="Administración">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const active =
               item.href === "/admin"

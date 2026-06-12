@@ -46,7 +46,7 @@ export default function InventarioPage() {
   }, [productos]);
 
   return (
-    <AdminGuard>
+    <AdminGuard allowedRoles={["admin", "bodega"]}>
       <AdminShell
         title="Inventario"
         subtitle="Control de existencias, stock mínimo y valor del almacén."

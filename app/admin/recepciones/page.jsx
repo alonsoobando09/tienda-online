@@ -291,7 +291,7 @@ export default function RecepcionesAdminPage() {
   }
 
   return (
-    <AdminGuard>
+    <AdminGuard allowedRoles={["admin", "bodega"]}>
       <AdminShell
         title="Recepcion nocturna"
         subtitle="Recibe devoluciones, revisa productos dejados y detecta descuadres."

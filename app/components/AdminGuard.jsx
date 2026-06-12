@@ -4,27 +4,35 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { isAdminUser } from "@/lib/isAdminUser";
+import { getUserProfile, normalizeRole } from "@/lib/authRoles";
 
-export default function AdminGuard({ children }) {
+export default function AdminGuard({ allowedRoles = ["admin"], children }) {
   const router = useRouter();
+  const allowedKey = allowedRoles.join("|");
 
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
+    const allowed = allowedKey.split("|").map(normalizeRole);
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       try {
-        const isAdmin = await isAdminUser(user);
+        const profile = await getUserProfile(user);
 
-        if (!isAdmin) {
+        if (!user || !profile.allowed || !allowed.includes(profile.role)) {
           localStorage.removeItem("admin");
           router.push(user ? "/" : "/login");
           return;
         }
 
-        localStorage.setItem("admin", "true");
-        localStorage.setItem("adminEmail", user.email || "");
+        if (profile.isAdmin) {
+          localStorage.setItem("admin", "true");
+          localStorage.setItem("adminEmail", user.email || "");
+        }
+
+        localStorage.setItem("userRole", profile.role);
+        localStorage.setItem("userEmail", user.email || "");
         setAuthorized(true);
       } catch (error) {
         console.error(error);
@@ -35,7 +43,7 @@ export default function AdminGuard({ children }) {
     });
 
     return () => unsubscribe();
-  }, [router]);
+  }, [allowedKey, router]);
 
   if (loading) {
     return (

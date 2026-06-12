@@ -20,10 +20,46 @@ liquidacion diaria.
 - Ayudante: puede apoyar la ruta, registrar clientes abiertos y entregar
   productos, segun permisos.
 
+## Acceso y permisos
+
+Los usuarios se controlan desde Firebase Authentication y la coleccion
+`usuarios`.
+
+Cada documento de `usuarios` debe usar como id el UID del usuario y debe tener el
+campo:
+
+- `rol`: `admin`, `bodega`, `carterista` o `ayudante`.
+
+Reglas de entrada:
+
+- `admin`: entra al panel completo `/admin`.
+- `bodega`: entra a despacho, recepcion e inventario.
+- `carterista`: entra a `/carterista`.
+- `ayudante`: entra a `/carterista` para apoyar la ruta.
+
+El correo principal `alriver1995zit@gmail.com` siempre se reconoce como
+administrador.
+
+Flujo recomendado para crear personal:
+
+1. Crear el usuario en Firebase Authentication con correo y contrasena.
+2. Copiar el UID que genera Firebase.
+3. Entrar al panel `Empleados`.
+4. Crear o editar el empleado.
+5. Pegar el UID.
+6. Seleccionar rol, dia de ruta, ruta asignada y estado.
+7. Guardar.
+
+Al guardar, el sistema crea o actualiza automaticamente el documento en
+`usuarios` para que el login sepa a que pantalla debe entrar esa persona.
+
 ## Reglas clave de carteristas
 
 - Solo puede entrar a la ruta del dia asignado.
 - Si necesita trabajar otro dia o ruta, requiere autorizacion del administrador.
+- El sistema toma `diaRuta` y `ruta` desde el usuario/empleado asignado.
+- Un carterista o ayudante no puede cambiar de ruta desde su pantalla.
+- El administrador si puede cambiar de ruta en modo revision.
 - Puede agregar clientes nuevos durante el dia de trabajo.
 - No puede borrar clientes.
 - Puede marcar un cliente como "solicitud de borrar" para que el administrador
@@ -321,6 +357,22 @@ Desde administrador:
 - Subir clientes por Excel.
 - Subir proveedores por Excel.
 - Actualizar datos masivos sin borrar historial.
+
+Formato recomendado para importar clientes:
+
+- `orden de visita`: numero de orden dentro de la ruta.
+- `name`: nombre del cliente.
+- `phone`: telefono o celular.
+- `address`: direccion, local o referencia.
+- `assigned_day`: numero del dia de ruta, donde 1 es lunes, 2 martes,
+  3 miercoles, 4 jueves, 5 viernes y 6 sabado.
+- `credit_limit`: limite de credito del cliente.
+- `current_balance`: deuda actual.
+
+La importacion usa el telefono como llave principal para evitar duplicados. Si
+no hay telefono, usa nombre + direccion. Si el Excel trae `orden de visita`, se
+respeta ese orden y luego se renumera cada ruta en consecutivo. Si no trae orden,
+los clientes nuevos se agregan al final de la ruta correspondiente.
 
 ## Primeras fases de desarrollo
 

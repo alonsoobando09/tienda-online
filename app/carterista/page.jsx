@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { db } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
+import RoleGuard from "@/app/components/RoleGuard";
 import {
   addDoc,
   collection,
@@ -18,6 +20,7 @@ import {
   rutasBase,
   sortClientesByRoute,
 } from "@/lib/operacion";
+import { getUserProfile } from "@/lib/authRoles";
 import { MessageCircle, Plus, Search, Trash2, X } from "lucide-react";
 
 const emptyForm = {
@@ -45,8 +48,9 @@ function getProductPrices(producto) {
   };
 }
 
-export default function CarteristaPage() {
+function CarteristaContent() {
   const todayRouteDay = getTodayRouteDay();
+  const [profile, setProfile] = useState(null);
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
   const [ruta, setRuta] = useState("Ruta 1");
@@ -59,6 +63,27 @@ export default function CarteristaPage() {
   const [ultimaFactura, setUltimaFactura] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      const nextProfile = await getUserProfile(user);
+      setProfile(nextProfile);
+
+      if (!nextProfile.isAdmin && nextProfile.ruta) {
+        setRuta(nextProfile.ruta);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const assignedDay = profile?.isAdmin
+    ? todayRouteDay
+    : profile?.diaRuta === todayRouteDay
+      ? todayRouteDay
+      : "";
+  const assignedRoute = profile?.isAdmin ? ruta : profile?.ruta || ruta;
+  const canWorkToday = Boolean(assignedDay && assignedRoute);
 
   async function cargarDatos(showLoading = true) {
     if (showLoading) setLoading(true);
@@ -87,14 +112,17 @@ export default function CarteristaPage() {
     const term = filter.trim().toLowerCase();
 
     return clientes
-      .filter((cliente) => cliente.diaRuta === todayRouteDay && cliente.ruta === ruta)
+      .filter(
+        (cliente) =>
+          cliente.diaRuta === assignedDay && cliente.ruta === assignedRoute
+      )
       .filter((cliente) => {
         if (!term) return true;
         return [cliente.nombre, cliente.telefono, cliente.direccion, cliente.local]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(term));
       });
-  }, [clientes, filter, ruta, todayRouteDay]);
+  }, [assignedDay, assignedRoute, clientes, filter]);
 
   const productosFiltrados = useMemo(() => {
     const term = productFilter.trim().toLowerCase();
@@ -149,7 +177,7 @@ export default function CarteristaPage() {
 
   async function agregarCliente(e) {
     e.preventDefault();
-    if (!todayRouteDay) {
+    if (!canWorkToday) {
       alert("Hoy no hay ruta activa. Pide autorizacion al administrador.");
       return;
     }
@@ -163,13 +191,15 @@ export default function CarteristaPage() {
 
       await addDoc(collection(db, "clientes"), {
         ...form,
-        diaRuta: todayRouteDay,
-        ruta,
+        diaRuta: assignedDay,
+        ruta: assignedRoute,
         ordenVisita,
         deudaActual: 0,
         diasDeuda: 0,
         semaforoDeuda: "verde",
         creadoPorCarterista: true,
+        carteristaId: profile?.uid || "",
+        carteristaNombre: profile?.nombre || "",
         solicitudBorrado: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -263,8 +293,10 @@ export default function CarteristaPage() {
       const facturaPayload = {
         tipo: "ruta",
         fecha: new Date().toISOString().slice(0, 10),
-        diaRuta: todayRouteDay,
-        ruta,
+        diaRuta: assignedDay,
+        ruta: assignedRoute,
+        carteristaId: profile?.uid || "",
+        carteristaNombre: profile?.nombre || "",
         clienteId: selectedCliente.id,
         clienteNombre: selectedCliente.nombre || "",
         telefono: selectedCliente.telefono || "",
@@ -351,25 +383,32 @@ export default function CarteristaPage() {
       <section className="route-hero">
         <div>
           <p className="home-eyebrow">Modo carterista</p>
-          <h1>Ruta de {getDiaLabel(todayRouteDay) || "hoy"}</h1>
+          <h1>Ruta de {getDiaLabel(assignedDay) || "hoy"}</h1>
           <p>
-            Visita clientes del dia, registra productos dejados, abonos, pagos
-            y deuda final sin tocar deudas cerradas manualmente.
+            {profile?.isAdmin
+              ? "Vista de administrador para revisar o probar rutas."
+              : `${profile?.nombre || "Usuario"} - ${assignedRoute || "sin ruta asignada"}`}
           </p>
         </div>
-        <select value={ruta} onChange={(e) => setRuta(e.target.value)}>
-          {rutasBase.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
+        {profile?.isAdmin ? (
+          <select value={ruta} onChange={(e) => setRuta(e.target.value)}>
+            {rutasBase.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="route-assigned-pill">
+            {assignedRoute || "Sin ruta"}
+          </div>
+        )}
       </section>
 
-      {!todayRouteDay && (
+      {!canWorkToday && (
         <section className="route-card route-alert">
-          Hoy no hay ruta asignada automaticamente. El administrador debe
-          autorizar trabajo fuera de dia.
+          Hoy no tienes ruta activa con este usuario. Revisa que el empleado
+          tenga dia de ruta y ruta asignada en Admin &gt; Empleados.
         </section>
       )}
 
@@ -397,7 +436,7 @@ export default function CarteristaPage() {
             value={form.local}
             onChange={(e) => updateField("local", e.target.value)}
           />
-          <button disabled={saving || !todayRouteDay} type="submit">
+          <button disabled={saving || !canWorkToday} type="submit">
             <Plus size={18} />
             {saving ? "Guardando..." : "Agregar cliente"}
           </button>
@@ -484,10 +523,7 @@ export default function CarteristaPage() {
               </label>
 
               <div className="sale-product-list">
-                {productosFiltrados.map((producto) => {
-                  const prices = getProductPrices(producto);
-
-                  return (
+                {productosFiltrados.map((producto) => (
                     <div className="sale-product-row" key={producto.id}>
                       <div>
                         <strong>{producto.nombre}</strong>
@@ -495,30 +531,29 @@ export default function CarteristaPage() {
                       </div>
                       <div className="price-dots">
                         <button
+                          aria-label="Agregar con precio minimo"
                           className="green"
                           onClick={() => agregarProducto(producto, "minimo")}
+                          title="Precio minimo"
                           type="button"
-                        >
-                          {money(prices.minimo)}
-                        </button>
+                        />
                         <button
+                          aria-label="Agregar con precio sugerido"
                           className="yellow"
                           onClick={() => agregarProducto(producto, "sugerido")}
+                          title="Precio sugerido"
                           type="button"
-                        >
-                          {money(prices.sugerido)}
-                        </button>
+                        />
                         <button
+                          aria-label="Agregar con precio maximo"
                           className="red"
                           onClick={() => agregarProducto(producto, "maximo")}
+                          title="Precio maximo"
                           type="button"
-                        >
-                          {money(prices.maximo)}
-                        </button>
+                        />
                       </div>
                     </div>
-                  );
-                })}
+                ))}
               </div>
             </div>
 
@@ -620,5 +655,13 @@ export default function CarteristaPage() {
         </article>
       </section>
     </main>
+  );
+}
+
+export default function CarteristaPage() {
+  return (
+    <RoleGuard allowedRoles={["admin", "carterista", "ayudante"]}>
+      <CarteristaContent />
+    </RoleGuard>
   );
 }

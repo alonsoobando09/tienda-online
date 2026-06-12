@@ -5,8 +5,15 @@ import Link from "next/link";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
 import { db, storage } from "@/lib/firebase";
-import { collection, deleteDoc, doc, getDocs } from "firebase/firestore";
-import { ImagePlus, Save, Trash2 } from "lucide-react";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  serverTimestamp,
+  writeBatch,
+} from "firebase/firestore";
+import { FileUp, ImagePlus, Save, Trash2 } from "lucide-react";
 import { categories } from "@/lib/categories";
 import { getSafeImageSrc } from "@/lib/images";
 import { uploadImageWithFallback } from "@/lib/clientImages";
@@ -45,6 +52,61 @@ const money = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
+function normalizeText(value) {
+  return String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function getCategorySlug(value) {
+  const normalized = normalizeText(value).replace(/[^a-z0-9]/g, "");
+
+  const match = categories.find((category) => {
+    const byName = normalizeText(category.nombre).replace(/[^a-z0-9]/g, "");
+    const bySlug = normalizeText(category.slug).replace(/[^a-z0-9]/g, "");
+    return normalized === byName || normalized === bySlug;
+  });
+
+  return match?.slug || "carnicos";
+}
+
+function toNumber(value) {
+  return Number(value) || 0;
+}
+
+function normalizeExcelProduct(row) {
+  const nombre = String(row.name || row.nombre || row.producto || "").trim();
+  const sku = String(row.sku || row.codigo || "").trim();
+  const costo = toNumber(row.cost || row.costo);
+  const precioMinimo = toNumber(row.min || row.precioMinimo || row.precio_minimo);
+  const precioMaximo = toNumber(row.max || row.precioMaximo || row.precio_maximo);
+
+  return {
+    nombre,
+    categoria: getCategorySlug(row.category || row.categoria),
+    sku,
+    proveedor: String(row.proveedor || "").trim(),
+    unidad: "unidad",
+    imagen: "",
+    imagenes: [],
+    descripcion: "",
+    costo,
+    precioMayor: precioMinimo,
+    precioDetal: precioMinimo,
+    precioMinimo,
+    precioMaximo,
+    precioPacaMayor: precioMaximo,
+    precioPacaDetal: precioMaximo,
+    unidadesPorPaca: 0,
+    stock: toNumber(row.stock),
+    stockMinimo: 5,
+    iva: 0,
+    activo: true,
+  };
+}
+
 export default function ProductosAdminPage() {
   const [productos, setProductos] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -53,6 +115,8 @@ export default function ProductosAdminPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState("");
   const [localPreview, setLocalPreview] = useState("");
   const [localGalleryPreviews, setLocalGalleryPreviews] = useState(["", "", ""]);
 
@@ -190,6 +254,92 @@ export default function ProductosAdminPage() {
 
     await deleteDoc(doc(db, "productos", id));
     await cargarProductos();
+  }
+
+  async function loadXlsxLibrary() {
+    if (window.XLSX) return window.XLSX;
+
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("No se pudo cargar el lector de Excel."));
+      document.head.appendChild(script);
+    });
+
+    return window.XLSX;
+  }
+
+  async function importarProductosExcel(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setImporting(true);
+    setImportMessage("");
+
+    try {
+      const XLSX = await loadXlsxLibrary();
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      const productosExcel = rows.map(normalizeExcelProduct).filter((item) => item.nombre);
+
+      if (productosExcel.length === 0) {
+        setImportMessage("El archivo no tiene productos validos.");
+        return;
+      }
+
+      const productosSnap = await getDocs(collection(db, "productos"));
+      const existingBySku = new Map();
+
+      productosSnap.docs.forEach((docu) => {
+        const sku = String(docu.data().sku || "").trim();
+        if (sku) existingBySku.set(sku, docu.id);
+      });
+
+      let created = 0;
+      let updated = 0;
+
+      for (let index = 0; index < productosExcel.length; index += 450) {
+        const batch = writeBatch(db);
+        const chunk = productosExcel.slice(index, index + 450);
+
+        chunk.forEach((producto) => {
+          const existingId = producto.sku ? existingBySku.get(producto.sku) : null;
+
+          if (existingId) {
+            batch.update(doc(db, "productos", existingId), {
+              ...producto,
+              updatedAt: serverTimestamp(),
+            });
+            updated += 1;
+          } else {
+            const productRef = doc(collection(db, "productos"));
+            batch.set(productRef, {
+              ...producto,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+            created += 1;
+          }
+        });
+
+        await batch.commit();
+      }
+
+      setImportMessage(
+        `Importacion lista: ${created} creados, ${updated} actualizados. Luego puedes editar cada producto y agregar imagenes.`
+      );
+      await cargarProductos();
+    } catch (error) {
+      console.error("Error importando productos:", error);
+      setImportMessage(error?.message || "No se pudo importar el archivo.");
+    } finally {
+      setImporting(false);
+    }
   }
 
   return (
@@ -419,6 +569,30 @@ export default function ProductosAdminPage() {
                   : "Guardar producto"}
             </button>
           </form>
+        </section>
+
+        <section className="admin-card" style={{ marginTop: 16 }}>
+          <div className="admin-section-title">
+            <div>
+              <h2>Importacion masiva</h2>
+              <p>
+                Sube un Excel con columnas sku, name, category, cost, min, max y
+                stock. Las imagenes se agregan despues desde Editar.
+              </p>
+            </div>
+            <label className={`admin-button ${importing ? "secondary" : ""}`}>
+              <FileUp size={18} />
+              {importing ? "Importando..." : "Subir Excel"}
+              <input
+                accept=".xlsx,.xls"
+                disabled={importing}
+                hidden
+                type="file"
+                onChange={importarProductosExcel}
+              />
+            </label>
+          </div>
+          {importMessage && <p className="admin-help">{importMessage}</p>}
         </section>
 
         <section className="admin-card" style={{ marginTop: 16 }}>

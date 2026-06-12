@@ -3,8 +3,20 @@
 import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { isAdminUser } from "@/lib/isAdminUser";
+import { getUserProfile } from "@/lib/authRoles";
 import { usePathname, useRouter } from "next/navigation";
+
+const bodegaRoutes = ["/admin/despachos", "/admin/recepciones", "/admin/inventario"];
+
+function canOpenAdminRoute(profile, pathname) {
+  if (profile.isAdmin) return true;
+
+  if (profile.role === "bodega") {
+    return bodegaRoutes.some((route) => pathname.startsWith(route));
+  }
+
+  return false;
+}
 
 export default function AdminLayout({ children }) {
   const router = useRouter();
@@ -25,9 +37,9 @@ export default function AdminLayout({ children }) {
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       try {
-        const isAdmin = await isAdminUser(user);
+        const profile = await getUserProfile(user);
 
-        if (!isAdmin) {
+        if (!user || !profile.allowed || !canOpenAdminRoute(profile, pathname)) {
           setAuthorized(false);
           router.push(user ? "/" : "/login");
           return;
@@ -40,7 +52,7 @@ export default function AdminLayout({ children }) {
     });
 
     return () => unsubscribe();
-  }, [isLoginPage, router]);
+  }, [isLoginPage, pathname, router]);
 
   if (checking) return <p>Verificando acceso...</p>;
 

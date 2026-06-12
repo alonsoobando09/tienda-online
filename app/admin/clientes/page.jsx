@@ -10,7 +10,6 @@ import {
   doc,
   getDocs,
   serverTimestamp,
-  updateDoc,
   writeBatch,
 } from "firebase/firestore";
 import {
@@ -21,7 +20,7 @@ import {
   rutasBase,
   sortClientesByRoute,
 } from "@/lib/operacion";
-import { Save, Trash2, UserPlus } from "lucide-react";
+import { FileUp, Save, Trash2, UserPlus } from "lucide-react";
 
 const emptyForm = {
   nombre: "",
@@ -30,11 +29,88 @@ const emptyForm = {
   local: "",
   diaRuta: "martes",
   ruta: "Ruta 1",
+  ordenVisita: "",
   insertarDespuesDe: "",
   deudaActual: "",
   diasDeuda: "0",
   observaciones: "",
 };
+
+const assignedDayMap = {
+  1: "lunes",
+  2: "martes",
+  3: "miercoles",
+  4: "jueves",
+  5: "viernes",
+  6: "sabado",
+};
+
+function normalizeText(value) {
+  return String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function toNumber(value) {
+  return Number(value) || 0;
+}
+
+function getVisitOrder(row) {
+  return toNumber(
+    row.ordenVisita ||
+      row.orden ||
+      row.order ||
+      row.visit_order ||
+      row["orden de visita"]
+  );
+}
+
+function normalizePhone(value) {
+  const text = String(value || "").replace(/\D/g, "");
+  return text ? text.replace(/^57/, "") : "";
+}
+
+function getClientKey(cliente) {
+  const phone = normalizePhone(cliente.telefono || cliente.phone);
+  if (phone) return `phone:${phone}`;
+
+  return `name:${normalizeText(cliente.nombre || cliente.name)}|address:${normalizeText(
+    cliente.direccion || cliente.address
+  )}`;
+}
+
+function getAssignedDay(value) {
+  const numberValue = Number(value);
+  if (assignedDayMap[numberValue]) return assignedDayMap[numberValue];
+
+  const normalized = normalizeText(value);
+  return diasRuta.find((dia) => dia.value === normalized)?.value || "martes";
+}
+
+function normalizeExcelClient(row) {
+  const nombre = String(row.name || row.nombre || row.cliente || "").trim();
+  const telefono = normalizePhone(row.phone || row.telefono || row.celular);
+  const direccion = String(row.address || row.direccion || "").trim();
+  const deudaActual = toNumber(row.current_balance || row.deudaActual || row.deuda);
+
+  return {
+    nombre,
+    telefono,
+    direccion,
+    local: direccion,
+    diaRuta: getAssignedDay(row.assigned_day || row.diaRuta || row.dia),
+    ruta: String(row.ruta || row.route || "Ruta 1").trim() || "Ruta 1",
+    ordenVisita: getVisitOrder(row),
+    limiteCredito: toNumber(row.credit_limit || row.limiteCredito),
+    deudaActual,
+    diasDeuda: deudaActual > 0 ? 8 : 0,
+    semaforoDeuda: getDebtColor(deudaActual > 0 ? 8 : 0),
+    observaciones: "",
+    solicitudBorrado: false,
+  };
+}
 
 export default function ClientesAdminPage() {
   const [clientes, setClientes] = useState([]);
@@ -43,6 +119,8 @@ export default function ClientesAdminPage() {
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState("");
 
   async function cargarClientes(showLoading = true) {
     if (showLoading) setLoading(true);
@@ -107,11 +185,59 @@ export default function ClientesAdminPage() {
       local: cliente.local || "",
       diaRuta: cliente.diaRuta || "martes",
       ruta: cliente.ruta || "Ruta 1",
+      ordenVisita: cliente.ordenVisita || "",
       insertarDespuesDe: "",
       deudaActual: cliente.deudaActual || "",
       diasDeuda: cliente.diasDeuda || "0",
       observaciones: cliente.observaciones || "",
     });
+  }
+
+  function getSameRouteClientes(diaRuta, ruta, excludeId = "") {
+    return sortClientesByRoute(
+      clientes.filter(
+        (cliente) =>
+          cliente.id !== excludeId &&
+          cliente.diaRuta === diaRuta &&
+          cliente.ruta === ruta
+      )
+    );
+  }
+
+  async function guardarOrdenCliente(clienteId, payload, desiredOrder) {
+    const sameRoute = getSameRouteClientes(
+      payload.diaRuta,
+      payload.ruta,
+      clienteId
+    );
+    const maxOrder = sameRoute.length + 1;
+    const nextOrder = Math.min(Math.max(Number(desiredOrder) || maxOrder, 1), maxOrder);
+    const ordered = [
+      ...sameRoute.slice(0, nextOrder - 1),
+      { id: clienteId, ...payload },
+      ...sameRoute.slice(nextOrder - 1),
+    ];
+    const batch = writeBatch(db);
+
+    ordered.forEach((cliente, index) => {
+      const ref = doc(db, "clientes", cliente.id);
+      const ordenVisita = index + 1;
+
+      if (cliente.id === clienteId) {
+        batch.update(ref, {
+          ...payload,
+          ordenVisita,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        batch.update(ref, {
+          ordenVisita,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    });
+
+    await batch.commit();
   }
 
   async function guardarCliente(e) {
@@ -135,15 +261,20 @@ export default function ClientesAdminPage() {
       };
 
       if (editingId) {
-        await updateDoc(doc(db, "clientes", editingId), payload);
+        await guardarOrdenCliente(editingId, payload, form.ordenVisita);
       } else {
         const sameRoute = clientesMismaRuta;
         const selected = sameRoute.find(
           (cliente) => cliente.id === form.insertarDespuesDe
         );
-        const ordenVisita = selected
-          ? Number(selected.ordenVisita || 0) + 1
-          : sameRoute.length + 1;
+        const ordenManual = Number(form.ordenVisita) || 0;
+        let ordenVisita = sameRoute.length + 1;
+
+        if (ordenManual) {
+          ordenVisita = Math.min(Math.max(ordenManual, 1), sameRoute.length + 1);
+        } else if (selected) {
+          ordenVisita = Number(selected.ordenVisita || 0) + 1;
+        }
 
         const batch = writeBatch(db);
         sameRoute
@@ -178,6 +309,144 @@ export default function ClientesAdminPage() {
     if (!confirm("Eliminar este cliente definitivamente?")) return;
     await deleteDoc(doc(db, "clientes", id));
     await cargarClientes();
+  }
+
+  async function loadXlsxLibrary() {
+    if (window.XLSX) return window.XLSX;
+
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("No se pudo cargar el lector de Excel."));
+      document.head.appendChild(script);
+    });
+
+    return window.XLSX;
+  }
+
+  async function importarClientesExcel(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setImporting(true);
+    setImportMessage("");
+
+    try {
+      const XLSX = await loadXlsxLibrary();
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      const clientesExcel = rows.map(normalizeExcelClient).filter((item) => item.nombre);
+
+      if (clientesExcel.length === 0) {
+        setImportMessage("El archivo no tiene clientes validos.");
+        return;
+      }
+
+      const clientesSnap = await getDocs(collection(db, "clientes"));
+      const existingByKey = new Map();
+      const maxOrdenByRoute = new Map();
+
+      clientesSnap.docs.forEach((docu) => {
+        const cliente = { id: docu.id, ...docu.data() };
+        const key = getClientKey(cliente);
+        existingByKey.set(key, cliente.id);
+
+        const routeKey = `${cliente.diaRuta || "martes"}|${cliente.ruta || "Ruta 1"}`;
+        const currentMax = maxOrdenByRoute.get(routeKey) || 0;
+        maxOrdenByRoute.set(routeKey, Math.max(currentMax, Number(cliente.ordenVisita) || 0));
+      });
+
+      let created = 0;
+      let updated = 0;
+
+      for (let index = 0; index < clientesExcel.length; index += 450) {
+        const batch = writeBatch(db);
+        const chunk = clientesExcel.slice(index, index + 450);
+
+        chunk.forEach((cliente) => {
+          const key = getClientKey(cliente);
+          const existingId = existingByKey.get(key);
+
+          if (existingId) {
+            batch.update(doc(db, "clientes", existingId), {
+              ...cliente,
+              updatedAt: serverTimestamp(),
+            });
+            updated += 1;
+            return;
+          }
+
+          const routeKey = `${cliente.diaRuta}|${cliente.ruta}`;
+          const desiredOrder = Number(cliente.ordenVisita) || 0;
+          const nextOrden = desiredOrder || (maxOrdenByRoute.get(routeKey) || 0) + 1;
+          maxOrdenByRoute.set(routeKey, nextOrden);
+
+          const clienteRef = doc(collection(db, "clientes"));
+          batch.set(clienteRef, {
+            ...cliente,
+            ordenVisita: nextOrden,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          existingByKey.set(key, clienteRef.id);
+          created += 1;
+        });
+
+        await batch.commit();
+      }
+
+      await renumerarRutas();
+
+      setImportMessage(
+        `Importacion lista: ${created} clientes creados, ${updated} actualizados. Orden de visita renumerado por ruta.`
+      );
+      await cargarClientes();
+    } catch (error) {
+      console.error("Error importando clientes:", error);
+      setImportMessage(error?.message || "No se pudo importar el archivo.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function renumerarRutas() {
+    const snapshot = await getDocs(collection(db, "clientes"));
+    const grouped = new Map();
+
+    snapshot.docs.forEach((docu) => {
+      const cliente = { id: docu.id, ...docu.data() };
+      const key = `${cliente.diaRuta || "martes"}|${cliente.ruta || "Ruta 1"}`;
+      const items = grouped.get(key) || [];
+      items.push(cliente);
+      grouped.set(key, items);
+    });
+
+    for (const items of grouped.values()) {
+      const ordered = items.sort((a, b) => {
+        const orderDiff = Number(a.ordenVisita || 999999) - Number(b.ordenVisita || 999999);
+        if (orderDiff !== 0) return orderDiff;
+        return String(a.nombre || "").localeCompare(String(b.nombre || ""));
+      });
+
+      for (let index = 0; index < ordered.length; index += 450) {
+        const batch = writeBatch(db);
+        const chunk = ordered.slice(index, index + 450);
+
+        chunk.forEach((cliente, chunkIndex) => {
+          batch.update(doc(db, "clientes", cliente.id), {
+            ordenVisita: index + chunkIndex + 1,
+            updatedAt: serverTimestamp(),
+          });
+        });
+
+        await batch.commit();
+      }
+    }
   }
 
   return (
@@ -246,6 +515,17 @@ export default function ClientesAdminPage() {
                   <option key={ruta} value={ruta} />
                 ))}
               </datalist>
+            </label>
+
+            <label>
+              Orden de visita
+              <input
+                min="1"
+                type="number"
+                value={form.ordenVisita}
+                onChange={(e) => updateField("ordenVisita", e.target.value)}
+                placeholder="Ej: 6"
+              />
             </label>
 
             {!editingId && (
@@ -328,6 +608,31 @@ export default function ClientesAdminPage() {
         </section>
 
         <section className="admin-card" style={{ marginTop: 16 }}>
+          <div className="admin-section-title">
+            <div>
+              <h2>Importacion masiva</h2>
+              <p>
+                Sube un Excel con columnas orden de visita, name, phone,
+                address, assigned_day, credit_limit y current_balance. El
+                telefono evita duplicados.
+              </p>
+            </div>
+            <label className={`admin-button ${importing ? "secondary" : ""}`}>
+              <FileUp size={18} />
+              {importing ? "Importando..." : "Subir Excel"}
+              <input
+                accept=".xlsx,.xls"
+                disabled={importing}
+                hidden
+                type="file"
+                onChange={importarClientesExcel}
+              />
+            </label>
+          </div>
+          {importMessage && <p className="admin-help">{importMessage}</p>}
+        </section>
+
+        <section className="admin-card" style={{ marginTop: 16 }}>
           <div className="admin-page-header">
             <div>
               <h2>Clientes registrados</h2>
@@ -377,6 +682,12 @@ export default function ClientesAdminPage() {
                       {money(cliente.deudaActual || 0)}
                       <br />
                       <small>{cliente.diasDeuda || 0} dias</small>
+                      {cliente.limiteCredito > 0 && (
+                        <>
+                          <br />
+                          <small>Limite {money(cliente.limiteCredito)}</small>
+                        </>
+                      )}
                     </td>
                     <td>
                       <span className={`debt-pill ${cliente.semaforoDeuda || "verde"}`}>

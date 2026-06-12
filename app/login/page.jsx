@@ -7,7 +7,7 @@ import {
   signInWithEmailAndPassword,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { isAdminUser } from "@/lib/isAdminUser";
+import { getRoleHome, getUserProfile } from "@/lib/authRoles";
 import { getLoginErrorMessage } from "@/lib/authErrors";
 
 export default function LoginPage() {
@@ -35,18 +35,31 @@ export default function LoginPage() {
         password
       );
 
-      const isAdmin = await isAdminUser(user);
+      const profile = await getUserProfile(user);
 
-      if (!isAdmin) {
+      if (!profile.allowed) {
         localStorage.removeItem("admin");
         localStorage.removeItem("adminEmail");
-        setErrorMessage("Tu usuario existe, pero no tiene permisos de administrador.");
+        localStorage.removeItem("userRole");
+        localStorage.removeItem("userEmail");
+        setErrorMessage(
+          "Tu usuario existe, pero todavia no tiene un rol asignado por el administrador."
+        );
         return;
       }
 
-      localStorage.setItem("admin", "true");
-      localStorage.setItem("adminEmail", user.email || "");
-      router.push("/admin");
+      localStorage.setItem("userRole", profile.role);
+      localStorage.setItem("userEmail", user.email || "");
+
+      if (profile.isAdmin) {
+        localStorage.setItem("admin", "true");
+        localStorage.setItem("adminEmail", user.email || "");
+      } else {
+        localStorage.removeItem("admin");
+        localStorage.removeItem("adminEmail");
+      }
+
+      router.push(getRoleHome(profile.role));
     } catch (error) {
       console.error(error);
       setErrorMessage(getLoginErrorMessage(error));
@@ -75,7 +88,7 @@ export default function LoginPage() {
 
   return (
     <main style={{ padding: 40 }}>
-      <h1>Login Administrador</h1>
+      <h1>Acceso Proveedor Central</h1>
 
       <form
         onSubmit={handleLogin}

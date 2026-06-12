@@ -11,25 +11,42 @@ import {
   deleteDoc,
   doc,
   serverTimestamp,
+  setDoc,
   updateDoc,
 } from "firebase/firestore";
+import { diasRuta, getDiaLabel, rutasBase } from "@/lib/operacion";
 import { Save, Trash2, UserPlus } from "lucide-react";
 
 const emptyForm = {
   nombre: "",
   cargo: "",
+  rol: "carterista",
+  uid: "",
   telefono: "",
   email: "",
   documento: "",
   pagoDiario: "",
+  diaRuta: "martes",
+  ruta: "Ruta 1",
   estado: "activo",
 };
+
+const roles = [
+  { value: "admin", label: "Administrador" },
+  { value: "bodega", label: "Bodega" },
+  { value: "carterista", label: "Carterista" },
+  { value: "ayudante", label: "Ayudante" },
+];
 
 const money = new Intl.NumberFormat("es-CO", {
   style: "currency",
   currency: "COP",
   maximumFractionDigits: 0,
 });
+
+function getRoleLabel(value) {
+  return roles.find((role) => role.value === value)?.label || "Sin rol";
+}
 
 export default function EmpleadosPage() {
   const { empleados, loading } = useEmpleados();
@@ -46,10 +63,14 @@ export default function EmpleadosPage() {
     setForm({
       nombre: empleado.nombre || "",
       cargo: empleado.cargo || "",
+      rol: empleado.rol || "carterista",
+      uid: empleado.uid || "",
       telefono: empleado.telefono || "",
       email: empleado.email || "",
       documento: empleado.documento || "",
       pagoDiario: empleado.pagoDiario || "",
+      diaRuta: empleado.diaRuta || "martes",
+      ruta: empleado.ruta || "Ruta 1",
       estado: empleado.estado || "activo",
     });
   }
@@ -59,24 +80,49 @@ export default function EmpleadosPage() {
     setForm(emptyForm);
   }
 
-  async function guardarEmpleado(e) {
-    e.preventDefault();
+  async function guardarEmpleado(event) {
+    event.preventDefault();
     setSaving(true);
 
     const payload = {
       ...form,
+      uid: form.uid.trim(),
+      email: form.email.trim().toLowerCase(),
       pagoDiario: Number(form.pagoDiario) || 0,
       updatedAt: serverTimestamp(),
     };
 
     try {
+      let empleadoId = editingId;
+
       if (editingId) {
         await updateDoc(doc(db, "empleados", editingId), payload);
       } else {
-        await addDoc(collection(db, "empleados"), {
+        const empleadoRef = await addDoc(collection(db, "empleados"), {
           ...payload,
           createdAt: serverTimestamp(),
         });
+        empleadoId = empleadoRef.id;
+      }
+
+      if (payload.uid) {
+        await setDoc(
+          doc(db, "usuarios", payload.uid),
+          {
+            uid: payload.uid,
+            empleadoId,
+            nombre: payload.nombre,
+            email: payload.email,
+            rol: payload.rol,
+            cargo: payload.cargo,
+            telefono: payload.telefono,
+            diaRuta: payload.diaRuta,
+            ruta: payload.ruta,
+            estado: payload.estado,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
       }
 
       limpiarFormulario();
@@ -88,22 +134,30 @@ export default function EmpleadosPage() {
     }
   }
 
-  async function eliminarEmpleado(id) {
-    if (!confirm("¿Eliminar este empleado?")) return;
-    await deleteDoc(doc(db, "empleados", id));
+  async function eliminarEmpleado(empleado) {
+    if (!confirm("Eliminar este empleado del panel operativo?")) return;
+
+    await deleteDoc(doc(db, "empleados", empleado.id));
+
+    if (empleado.uid) {
+      await deleteDoc(doc(db, "usuarios", empleado.uid));
+    }
   }
 
   return (
     <AdminGuard>
       <AdminShell
         title="Empleados"
-        subtitle="Gestiona equipo, cargos, pagos diarios y estado operativo."
+        subtitle="Gestiona equipo, roles de acceso, pagos diarios y rutas asignadas."
       >
         <section className="admin-card admin-accent-card">
           <div className="admin-section-title">
             <div>
               <h2>{editingId ? "Editar empleado" : "Nuevo empleado"}</h2>
-              <p>Registra datos básicos para operación y nómina.</p>
+              <p>
+                Registra personal, conecta su usuario de Firebase y define su
+                permiso operativo.
+              </p>
             </div>
           </div>
 
@@ -112,7 +166,7 @@ export default function EmpleadosPage() {
               Nombre
               <input
                 value={form.nombre}
-                onChange={(e) => updateField("nombre", e.target.value)}
+                onChange={(event) => updateField("nombre", event.target.value)}
                 required
               />
             </label>
@@ -121,16 +175,39 @@ export default function EmpleadosPage() {
               Cargo
               <input
                 value={form.cargo}
-                onChange={(e) => updateField("cargo", e.target.value)}
-                placeholder="Vendedor, logística, caja..."
+                onChange={(event) => updateField("cargo", event.target.value)}
+                placeholder="Carterista, ayudante, bodega..."
               />
             </label>
 
             <label>
-              Teléfono
+              Rol de acceso
+              <select
+                value={form.rol}
+                onChange={(event) => updateField("rol", event.target.value)}
+              >
+                {roles.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              UID Firebase
+              <input
+                value={form.uid}
+                onChange={(event) => updateField("uid", event.target.value)}
+                placeholder="UID de Authentication"
+              />
+            </label>
+
+            <label>
+              Telefono
               <input
                 value={form.telefono}
-                onChange={(e) => updateField("telefono", e.target.value)}
+                onChange={(event) => updateField("telefono", event.target.value)}
               />
             </label>
 
@@ -139,7 +216,7 @@ export default function EmpleadosPage() {
               <input
                 type="email"
                 value={form.email}
-                onChange={(e) => updateField("email", e.target.value)}
+                onChange={(event) => updateField("email", event.target.value)}
               />
             </label>
 
@@ -147,7 +224,7 @@ export default function EmpleadosPage() {
               Documento
               <input
                 value={form.documento}
-                onChange={(e) => updateField("documento", e.target.value)}
+                onChange={(event) => updateField("documento", event.target.value)}
               />
             </label>
 
@@ -156,15 +233,43 @@ export default function EmpleadosPage() {
               <input
                 type="number"
                 value={form.pagoDiario}
-                onChange={(e) => updateField("pagoDiario", e.target.value)}
+                onChange={(event) => updateField("pagoDiario", event.target.value)}
               />
+            </label>
+
+            <label>
+              Dia de ruta
+              <select
+                value={form.diaRuta}
+                onChange={(event) => updateField("diaRuta", event.target.value)}
+              >
+                {diasRuta.map((dia) => (
+                  <option key={dia.value} value={dia.value}>
+                    {dia.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              Ruta asignada
+              <select
+                value={form.ruta}
+                onChange={(event) => updateField("ruta", event.target.value)}
+              >
+                {rutasBase.map((ruta) => (
+                  <option key={ruta} value={ruta}>
+                    {ruta}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label>
               Estado
               <select
                 value={form.estado}
-                onChange={(e) => updateField("estado", e.target.value)}
+                onChange={(event) => updateField("estado", event.target.value)}
               >
                 <option value="activo">Activo</option>
                 <option value="inactivo">Inactivo</option>
@@ -182,16 +287,22 @@ export default function EmpleadosPage() {
                 type="button"
                 onClick={limpiarFormulario}
               >
-                Cancelar edición
+                Cancelar edicion
               </button>
             )}
+
+            <p className="admin-help" style={{ gridColumn: "1 / -1" }}>
+              Para activar el acceso: crea el usuario en Firebase Authentication,
+              copia su UID y pegalo aqui. Al guardar se actualiza la coleccion
+              usuarios con el rol correcto.
+            </p>
           </form>
         </section>
 
         <section className="admin-card" style={{ marginTop: 16 }}>
           <div className="admin-page-header">
             <div>
-              <h2>Equipo</h2>
+              <h2>Equipo operativo</h2>
               <p>{empleados.length} empleados registrados</p>
             </div>
           </div>
@@ -203,8 +314,9 @@ export default function EmpleadosPage() {
               <thead>
                 <tr>
                   <th>Empleado</th>
-                  <th>Cargo</th>
+                  <th>Rol</th>
                   <th>Contacto</th>
+                  <th>Ruta</th>
                   <th>Pago diario</th>
                   <th>Estado</th>
                   <th>Acciones</th>
@@ -217,12 +329,25 @@ export default function EmpleadosPage() {
                       <strong>{empleado.nombre}</strong>
                       <br />
                       <small>{empleado.documento || "Sin documento"}</small>
+                      <br />
+                      <small>{empleado.uid ? `UID: ${empleado.uid}` : "Sin UID"}</small>
                     </td>
-                    <td>{empleado.cargo || "Sin cargo"}</td>
                     <td>
-                      {empleado.telefono || "Sin teléfono"}
+                      <span className="admin-pill">
+                        {getRoleLabel(empleado.rol)}
+                      </span>
+                      <br />
+                      <small>{empleado.cargo || "Sin cargo"}</small>
+                    </td>
+                    <td>
+                      {empleado.telefono || "Sin telefono"}
                       <br />
                       <small>{empleado.email || "Sin correo"}</small>
+                    </td>
+                    <td>
+                      {getDiaLabel(empleado.diaRuta)}
+                      <br />
+                      <small>{empleado.ruta || "Sin ruta"}</small>
                     </td>
                     <td>{money.format(empleado.pagoDiario || 0)}</td>
                     <td>
@@ -239,7 +364,7 @@ export default function EmpleadosPage() {
                       </button>
                       <button
                         className="admin-button danger"
-                        onClick={() => eliminarEmpleado(empleado.id)}
+                        onClick={() => eliminarEmpleado(empleado)}
                       >
                         <Trash2 size={16} />
                       </button>

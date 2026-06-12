@@ -230,7 +230,7 @@ export default function DespachosAdminPage() {
   }
 
   return (
-    <AdminGuard>
+    <AdminGuard allowedRoles={["admin", "bodega"]}>
       <AdminShell
         title="Despachos"
         subtitle="Salida de surtido desde bodega por ruta, carterista y ayudante."
