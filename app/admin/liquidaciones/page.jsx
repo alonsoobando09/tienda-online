@@ -13,7 +13,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { money } from "@/lib/operacion";
-import { Calculator, Save } from "lucide-react";
+import { Calculator, ReceiptText, Save } from "lucide-react";
 
 const emptyForm = {
   recepcionId: "",
@@ -36,13 +36,15 @@ function number(value) {
 export default function LiquidacionesAdminPage() {
   const [recepciones, setRecepciones] = useState([]);
   const [liquidaciones, setLiquidaciones] = useState([]);
+  const [gastosRuta, setGastosRuta] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
 
   async function cargarDatos() {
-    const [recepcionesSnap, liquidacionesSnap] = await Promise.all([
+    const [recepcionesSnap, liquidacionesSnap, gastosSnap] = await Promise.all([
       getDocs(collection(db, "recepciones")),
       getDocs(collection(db, "liquidaciones")),
+      getDocs(collection(db, "gastosRuta")),
     ]);
 
     setRecepciones(
@@ -51,6 +53,7 @@ export default function LiquidacionesAdminPage() {
     setLiquidaciones(
       liquidacionesSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() }))
     );
+    setGastosRuta(gastosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })));
   }
 
   useEffect(() => {
@@ -75,6 +78,43 @@ export default function LiquidacionesAdminPage() {
     () => recepciones.find((item) => item.id === form.recepcionId),
     [form.recepcionId, recepciones]
   );
+
+  const gastosRecepcion = useMemo(() => {
+    if (!recepcion) return [];
+
+    return gastosRuta
+      .filter(
+        (gasto) =>
+          gasto.fecha === recepcion.fechaRecepcion &&
+          gasto.diaRuta === recepcion.diaRuta &&
+          gasto.ruta === recepcion.ruta
+      )
+      .sort((a, b) => String(b.createdAt?.seconds || "").localeCompare(String(a.createdAt?.seconds || "")));
+  }, [gastosRuta, recepcion]);
+
+  const resumenGastos = useMemo(() => {
+    return gastosRecepcion.reduce(
+      (acc, gasto) => {
+        const valor = number(gasto.valor);
+        const persona = gasto.persona === "ayudante" ? "ayudante" : "carterista";
+
+        acc.total += valor;
+
+        if (gasto.tipo === "almuerzo") acc[persona].almuerzo += valor;
+        else if (gasto.tipo === "prestamo") acc[persona].prestamo += valor;
+        else if (gasto.tipo === "consumo") acc[persona].consumo += valor;
+        else acc.otrosRuta += valor;
+
+        return acc;
+      },
+      {
+        total: 0,
+        otrosRuta: 0,
+        carterista: { almuerzo: 0, prestamo: 0, consumo: 0 },
+        ayudante: { almuerzo: 0, prestamo: 0, consumo: 0 },
+      }
+    );
+  }, [gastosRecepcion]);
 
   const calculo = useMemo(() => {
     const costoProductosDejados = (recepcion?.items || []).reduce(
@@ -122,6 +162,18 @@ export default function LiquidacionesAdminPage() {
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function cargarGastosRegistrados() {
+    setForm((current) => ({
+      ...current,
+      carteristaAlmuerzo: String(resumenGastos.carterista.almuerzo || ""),
+      carteristaPrestamos: String(resumenGastos.carterista.prestamo || ""),
+      carteristaConsumos: String(resumenGastos.carterista.consumo || ""),
+      ayudanteAlmuerzo: String(resumenGastos.ayudante.almuerzo || ""),
+      ayudantePrestamos: String(resumenGastos.ayudante.prestamo || ""),
+      ayudanteConsumos: String(resumenGastos.ayudante.consumo || ""),
+    }));
   }
 
   async function guardarLiquidacion() {
@@ -172,6 +224,13 @@ export default function LiquidacionesAdminPage() {
           ayudanteAlmuerzo: number(form.ayudanteAlmuerzo),
           ayudantePrestamos: number(form.ayudantePrestamos),
           ayudanteConsumos: number(form.ayudanteConsumos),
+        },
+        gastosRutaRegistrados: gastosRecepcion.map((gasto) => gasto.id),
+        resumenGastosRuta: {
+          total: resumenGastos.total,
+          otrosRuta: resumenGastos.otrosRuta,
+          carterista: resumenGastos.carterista,
+          ayudante: resumenGastos.ayudante,
         },
         observaciones: form.observaciones.trim(),
         estado: "liquidado",
@@ -238,6 +297,27 @@ export default function LiquidacionesAdminPage() {
             </div>
             <Calculator size={28} />
           </div>
+
+          {recepcion && (
+            <div className="route-expense-panel">
+              <div>
+                <h3>Gastos registrados por la ruta</h3>
+                <p>
+                  {gastosRecepcion.length} movimientos guardados -{" "}
+                  {money(resumenGastos.total)}
+                </p>
+              </div>
+              <button
+                className="admin-button secondary"
+                disabled={!gastosRecepcion.length}
+                onClick={cargarGastosRegistrados}
+                type="button"
+              >
+                <ReceiptText size={18} />
+                Cargar gastos
+              </button>
+            </div>
+          )}
 
           <div className="admin-form">
             <label style={{ gridColumn: "1 / -1" }}>
@@ -354,6 +434,26 @@ export default function LiquidacionesAdminPage() {
               <strong>{money(recepcion?.costoFaltante || 0)}</strong>
               <span>Facturas ruta</span>
               <strong>{recepcion?.totalFacturasRuta || 0}</strong>
+            </div>
+          </article>
+
+          <article className="admin-card">
+            <h2>Gastos registrados</h2>
+            <div className="liquidation-lines">
+              <span>Carterista almuerzo</span>
+              <strong>{money(resumenGastos.carterista.almuerzo)}</strong>
+              <span>Carterista prestamos</span>
+              <strong>{money(resumenGastos.carterista.prestamo)}</strong>
+              <span>Carterista consumos</span>
+              <strong>{money(resumenGastos.carterista.consumo)}</strong>
+              <span>Ayudante almuerzo</span>
+              <strong>{money(resumenGastos.ayudante.almuerzo)}</strong>
+              <span>Ayudante prestamos</span>
+              <strong>{money(resumenGastos.ayudante.prestamo)}</strong>
+              <span>Ayudante consumos</span>
+              <strong>{money(resumenGastos.ayudante.consumo)}</strong>
+              <span>Otros ruta</span>
+              <strong>{money(resumenGastos.otrosRuta)}</strong>
             </div>
           </article>
 

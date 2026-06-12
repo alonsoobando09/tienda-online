@@ -21,7 +21,15 @@ import {
   sortClientesByRoute,
 } from "@/lib/operacion";
 import { getUserProfile } from "@/lib/authRoles";
-import { MessageCircle, Plus, Search, Trash2, X } from "lucide-react";
+import {
+  LocateFixed,
+  MessageCircle,
+  Plus,
+  ReceiptText,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 
 const emptyForm = {
   nombre: "",
@@ -34,6 +42,13 @@ const emptyPago = {
   abonoDeudaAnterior: "",
   pagoProductosHoy: "",
   observaciones: "",
+};
+
+const emptyGasto = {
+  persona: "carterista",
+  tipo: "almuerzo",
+  valor: "",
+  descripcion: "",
 };
 
 function getProductPrices(producto) {
@@ -53,14 +68,19 @@ function CarteristaContent() {
   const [profile, setProfile] = useState(null);
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
+  const [gastosRuta, setGastosRuta] = useState([]);
   const [ruta, setRuta] = useState("Ruta 1");
   const [form, setForm] = useState(emptyForm);
+  const [gastoForm, setGastoForm] = useState(emptyGasto);
   const [filter, setFilter] = useState("");
   const [productFilter, setProductFilter] = useState("");
   const [selectedCliente, setSelectedCliente] = useState(null);
   const [saleItems, setSaleItems] = useState([]);
   const [pago, setPago] = useState(emptyPago);
   const [ultimaFactura, setUltimaFactura] = useState(null);
+  const [autorizacion, setAutorizacion] = useState(null);
+  const [locationMessage, setLocationMessage] = useState("");
+  const [sendingLocation, setSendingLocation] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -68,6 +88,26 @@ function CarteristaContent() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       const nextProfile = await getUserProfile(user);
       setProfile(nextProfile);
+
+      if (!nextProfile.isAdmin && nextProfile.uid) {
+        const today = new Date().toISOString().slice(0, 10);
+        const snap = await getDocs(collection(db, "autorizacionesRuta"));
+        const activeAuthorization = snap.docs
+          .map((docu) => ({ id: docu.id, ...docu.data() }))
+          .find(
+            (item) =>
+              item.uid === nextProfile.uid &&
+              item.fecha === today &&
+              item.estado === "activa"
+          );
+
+        setAutorizacion(activeAuthorization || null);
+
+        if (activeAuthorization?.ruta) {
+          setRuta(activeAuthorization.ruta);
+          return;
+        }
+      }
 
       if (!nextProfile.isAdmin && nextProfile.ruta) {
         setRuta(nextProfile.ruta);
@@ -79,17 +119,22 @@ function CarteristaContent() {
 
   const assignedDay = profile?.isAdmin
     ? todayRouteDay
-    : profile?.diaRuta === todayRouteDay
+    : autorizacion?.diaRuta
+      ? autorizacion.diaRuta
+      : profile?.diaRuta === todayRouteDay
       ? todayRouteDay
       : "";
-  const assignedRoute = profile?.isAdmin ? ruta : profile?.ruta || ruta;
+  const assignedRoute = profile?.isAdmin
+    ? ruta
+    : autorizacion?.ruta || profile?.ruta || ruta;
   const canWorkToday = Boolean(assignedDay && assignedRoute);
 
   async function cargarDatos(showLoading = true) {
     if (showLoading) setLoading(true);
-    const [clientesSnap, productosSnap] = await Promise.all([
+    const [clientesSnap, productosSnap, gastosSnap] = await Promise.all([
       getDocs(collection(db, "clientes")),
       getDocs(collection(db, "productos")),
+      getDocs(collection(db, "gastosRuta")),
     ]);
     setClientes(
       sortClientesByRoute(
@@ -97,6 +142,7 @@ function CarteristaContent() {
       )
     );
     setProductos(productosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })));
+    setGastosRuta(gastosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })));
     setLoading(false);
   }
 
@@ -160,12 +206,145 @@ function CarteristaContent() {
     };
   }, [pago.abonoDeudaAnterior, pago.pagoProductosHoy, saleItems, selectedCliente]);
 
+  const gastosRutaActual = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+
+    return gastosRuta
+      .filter(
+        (gasto) =>
+          gasto.fecha === today &&
+          gasto.diaRuta === assignedDay &&
+          gasto.ruta === assignedRoute
+      )
+      .sort((a, b) => String(b.createdAt?.seconds || "").localeCompare(String(a.createdAt?.seconds || "")));
+  }, [assignedDay, assignedRoute, gastosRuta]);
+
+  const resumenGastosRuta = useMemo(() => {
+    return gastosRutaActual.reduce(
+      (acc, gasto) => {
+        const valor = Number(gasto.valor) || 0;
+        const persona = gasto.persona === "ayudante" ? "ayudante" : "carterista";
+
+        acc.total += valor;
+
+        if (gasto.tipo === "almuerzo") acc[persona].almuerzo += valor;
+        else if (gasto.tipo === "prestamo") acc[persona].prestamo += valor;
+        else if (gasto.tipo === "consumo") acc[persona].consumo += valor;
+        else acc.otros += valor;
+
+        return acc;
+      },
+      {
+        total: 0,
+        otros: 0,
+        carterista: { almuerzo: 0, prestamo: 0, consumo: 0 },
+        ayudante: { almuerzo: 0, prestamo: 0, consumo: 0 },
+      }
+    );
+  }, [gastosRutaActual]);
+
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
   function updatePago(field, value) {
     setPago((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateGasto(field, value) {
+    setGastoForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function registrarGastoRuta(e) {
+    e.preventDefault();
+
+    if (!canWorkToday) {
+      alert("Hoy no hay ruta activa. Pide autorizacion al administrador.");
+      return;
+    }
+
+    const valor = Number(gastoForm.valor) || 0;
+    if (valor <= 0) {
+      alert("Escribe un valor mayor a cero.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      await addDoc(collection(db, "gastosRuta"), {
+        uid: profile?.uid || "",
+        empleadoNombre: profile?.nombre || "",
+        empleadoRol: profile?.role || "",
+        fecha: new Date().toISOString().slice(0, 10),
+        diaRuta: assignedDay,
+        ruta: assignedRoute,
+        persona: gastoForm.persona,
+        tipo: gastoForm.tipo,
+        valor,
+        descripcion: gastoForm.descripcion.trim(),
+        estado: "registrado",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      setGastoForm(emptyGasto);
+      await cargarDatos(false);
+    } catch (error) {
+      console.error("Error guardando gasto de ruta:", error);
+      alert("No se pudo guardar el gasto.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function enviarUbicacion() {
+    setLocationMessage("");
+
+    if (!navigator.geolocation) {
+      setLocationMessage("Este dispositivo no permite leer ubicacion.");
+      return;
+    }
+
+    if (!profile?.uid) {
+      setLocationMessage("No se encontro el usuario de ruta.");
+      return;
+    }
+
+    setSendingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const fecha = new Date().toISOString().slice(0, 10);
+
+          await addDoc(collection(db, "ubicacionesRuta"), {
+            uid: profile.uid,
+            empleadoNombre: profile.nombre || "",
+            empleadoRol: profile.role || "",
+            fecha,
+            diaRuta: assignedDay,
+            ruta: assignedRoute,
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            timestamp: serverTimestamp(),
+          });
+
+          setLocationMessage("Ubicacion enviada al administrador.");
+        } catch (error) {
+          console.error("Error guardando ubicacion:", error);
+          setLocationMessage("No se pudo guardar la ubicacion.");
+        } finally {
+          setSendingLocation(false);
+        }
+      },
+      () => {
+        setLocationMessage("Permiso de ubicacion rechazado o no disponible.");
+        setSendingLocation(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 }
+    );
   }
 
   function seleccionarCliente(cliente) {
@@ -399,16 +578,38 @@ function CarteristaContent() {
             ))}
           </select>
         ) : (
-          <div className="route-assigned-pill">
-            {assignedRoute || "Sin ruta"}
+          <div className="route-hero-actions">
+            <div className="route-assigned-pill">
+              {assignedRoute || "Sin ruta"}
+            </div>
+            <button
+              className="route-location-button"
+              disabled={sendingLocation || !canWorkToday}
+              onClick={enviarUbicacion}
+              type="button"
+            >
+              <LocateFixed size={17} />
+              {sendingLocation ? "Enviando..." : "Ubicacion"}
+            </button>
           </div>
         )}
       </section>
+
+      {locationMessage && (
+        <section className="route-card route-info">{locationMessage}</section>
+      )}
 
       {!canWorkToday && (
         <section className="route-card route-alert">
           Hoy no tienes ruta activa con este usuario. Revisa que el empleado
           tenga dia de ruta y ruta asignada en Admin &gt; Empleados.
+        </section>
+      )}
+
+      {autorizacion && (
+        <section className="route-card route-info">
+          Autorizacion especial activa: {getDiaLabel(autorizacion.diaRuta)} -{" "}
+          {autorizacion.ruta}. {autorizacion.motivo || ""}
         </section>
       )}
 
@@ -488,6 +689,82 @@ function CarteristaContent() {
             </div>
           )}
         </section>
+      </section>
+
+      <section className="route-card route-expenses">
+        <div className="route-toolbar">
+          <div>
+            <h2>Gastos y prestamos de ruta</h2>
+            <p>Registra almuerzos, prestamos y consumos antes de liquidar.</p>
+          </div>
+          <strong>{money(resumenGastosRuta.total)}</strong>
+        </div>
+
+        <div className="route-expense-grid">
+          <form className="route-form" onSubmit={registrarGastoRuta}>
+            <select
+              value={gastoForm.persona}
+              onChange={(e) => updateGasto("persona", e.target.value)}
+            >
+              <option value="carterista">Carterista</option>
+              <option value="ayudante">Ayudante</option>
+            </select>
+            <select
+              value={gastoForm.tipo}
+              onChange={(e) => updateGasto("tipo", e.target.value)}
+            >
+              <option value="almuerzo">Almuerzo</option>
+              <option value="prestamo">Prestamo</option>
+              <option value="consumo">Producto consumido</option>
+              <option value="gasolina">Gasolina</option>
+              <option value="otro">Otro</option>
+            </select>
+            <input
+              min="0"
+              placeholder="Valor"
+              type="number"
+              value={gastoForm.valor}
+              onChange={(e) => updateGasto("valor", e.target.value)}
+            />
+            <input
+              placeholder="Detalle"
+              value={gastoForm.descripcion}
+              onChange={(e) => updateGasto("descripcion", e.target.value)}
+            />
+            <button disabled={saving || !canWorkToday} type="submit">
+              <ReceiptText size={18} />
+              Registrar
+            </button>
+          </form>
+
+          <div className="liquidation-lines">
+            <span>Carterista almuerzo</span>
+            <strong>{money(resumenGastosRuta.carterista.almuerzo)}</strong>
+            <span>Carterista prestamos</span>
+            <strong>{money(resumenGastosRuta.carterista.prestamo)}</strong>
+            <span>Carterista consumos</span>
+            <strong>{money(resumenGastosRuta.carterista.consumo)}</strong>
+            <span>Ayudante almuerzo</span>
+            <strong>{money(resumenGastosRuta.ayudante.almuerzo)}</strong>
+            <span>Ayudante prestamos</span>
+            <strong>{money(resumenGastosRuta.ayudante.prestamo)}</strong>
+            <span>Ayudante consumos</span>
+            <strong>{money(resumenGastosRuta.ayudante.consumo)}</strong>
+            <span>Otros ruta</span>
+            <strong>{money(resumenGastosRuta.otros)}</strong>
+          </div>
+        </div>
+
+        {gastosRutaActual.length > 0 && (
+          <div className="route-expense-list">
+            {gastosRutaActual.slice(0, 8).map((gasto) => (
+              <span key={gasto.id}>
+                {gasto.persona} - {gasto.tipo}: {money(gasto.valor)}{" "}
+                {gasto.descripcion ? `(${gasto.descripcion})` : ""}
+              </span>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="sale-workspace">

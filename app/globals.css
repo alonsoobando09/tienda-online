@@ -411,6 +411,33 @@ button:hover {
   box-shadow: inset 0 0 0 1px rgba(18, 35, 29, .14);
 }
 
+.route-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.route-location-button {
+  border: 0;
+  border-radius: 8px;
+  min-height: 44px;
+  padding: 10px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  color: #12231d;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.route-location-button:disabled {
+  opacity: .62;
+  cursor: not-allowed;
+}
+
 .route-grid {
   display: grid;
   grid-template-columns: 360px minmax(0, 1fr);
@@ -429,6 +456,14 @@ button:hover {
 .route-alert {
   margin-top: 16px;
   border-left: 5px solid #b42318;
+}
+
+.route-info {
+  margin-top: 16px;
+  border-left: 5px solid #2563eb;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-weight: 800;
 }
 
 .route-form {
@@ -536,6 +571,44 @@ button:hover {
 
 .sale-workspace {
   margin-top: 16px;
+}
+
+.route-expenses {
+  margin-top: 16px;
+}
+
+.route-expense-grid {
+  display: grid;
+  grid-template-columns: 380px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.route-expense-grid select,
+.route-expense-grid input {
+  width: 100%;
+  border: 1px solid #ced8d3;
+  border-radius: 8px;
+  padding: 11px;
+  font: inherit;
+  background: #fff;
+}
+
+.route-expense-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.route-expense-list span {
+  border: 1px solid #dce6e0;
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: #f8fbf8;
+  color: #394841;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .sale-grid {
@@ -784,6 +857,27 @@ button:hover {
   color: #12231d;
 }
 
+.route-expense-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #dce6e0;
+  border-radius: 8px;
+  background: #f8fbf8;
+}
+
+.route-expense-panel h3 {
+  margin: 0;
+}
+
+.route-expense-panel p {
+  margin: 4px 0 0;
+  color: #66756f;
+}
+
 .report-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(320px, .7fr);
@@ -793,6 +887,53 @@ button:hover {
 
 .report-kpis {
   margin-top: 16px;
+}
+
+.map-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, .6fr);
+  gap: 16px;
+}
+
+.map-panel {
+  min-height: 440px;
+}
+
+.map-canvas {
+  position: relative;
+  min-height: 340px;
+  margin-top: 16px;
+  border-radius: 8px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(18, 35, 29, .08) 1px, transparent 1px),
+    linear-gradient(rgba(18, 35, 29, .08) 1px, transparent 1px),
+    linear-gradient(135deg, #dbeafe, #ecfdf5);
+  background-size: 42px 42px, 42px 42px, auto;
+  border: 1px solid #d7e4dc;
+}
+
+.map-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 190px;
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: #b42318;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+  box-shadow: 0 10px 24px rgba(180, 35, 24, .22);
+}
+
+.map-marker span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .access-screen {
@@ -1475,6 +1616,10 @@ button:hover {
     grid-template-columns: 1fr;
   }
 
+  .route-expense-grid {
+    grid-template-columns: 1fr;
+  }
+
   .route-toolbar {
     display: grid;
   }
@@ -1515,8 +1660,21 @@ button:hover {
     grid-template-columns: 1fr;
   }
 
+  .route-expense-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .report-grid {
     grid-template-columns: 1fr;
+  }
+
+  .map-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .route-hero-actions {
+    justify-content: flex-start;
   }
 
   .sale-grid {

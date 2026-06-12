@@ -60,6 +60,10 @@ Al guardar, el sistema crea o actualiza automaticamente el documento en
 - El sistema toma `diaRuta` y `ruta` desde el usuario/empleado asignado.
 - Un carterista o ayudante no puede cambiar de ruta desde su pantalla.
 - El administrador si puede cambiar de ruta en modo revision.
+- En `Autorizaciones`, el administrador puede aprobar una fecha especifica,
+  un dia de ruta y una ruta diferente para un carterista o ayudante.
+- La autorizacion solo aplica si esta activa y si la fecha coincide con el dia
+  actual de trabajo.
 - Puede agregar clientes nuevos durante el dia de trabajo.
 - No puede borrar clientes.
 - Puede marcar un cliente como "solicitud de borrar" para que el administrador
@@ -224,6 +228,28 @@ Una ruta contiene:
 - Descuadres.
 - Liquidacion.
 
+## Gastos, prestamos y consumos de ruta
+
+Durante el dia el carterista puede registrar movimientos de la ruta:
+
+- Almuerzo del carterista.
+- Prestamo del carterista.
+- Producto consumido por el carterista.
+- Almuerzo del ayudante.
+- Prestamo del ayudante.
+- Producto consumido por el ayudante.
+- Gasolina u otros gastos operativos.
+
+Cada registro queda guardado con fecha, ruta, dia de ruta, usuario que lo
+registro, persona afectada, tipo, valor y detalle.
+
+En `Liquidacion diaria`, el administrador puede seleccionar la recepcion de la
+noche, ver los gastos registrados por esa ruta y cargar esos valores
+automaticamente a los descuentos antes de guardar la liquidacion.
+
+Esto evita depender de memoria o papeles sueltos: lo que se gasto durante la
+ruta llega a la liquidacion del mismo dia.
+
 ## Factura de cliente
 
 Al confirmar una venta o fiado:
@@ -348,6 +374,12 @@ Solo administrador:
 - Nombre del carterista.
 - Ultima hora reportada.
 - Datos actualizados si el carterista tiene ubicacion activa.
+- El carterista o ayudante puede enviar su ubicacion desde el celular con el
+  boton `Ubicacion`.
+- La ubicacion queda guardada con fecha, hora, ruta, dia, latitud, longitud y
+  precision.
+- En el panel `Mapa`, el administrador ve la ultima ubicacion por persona y un
+  enlace para abrirla en Google Maps.
 
 ## Importacion masiva
 

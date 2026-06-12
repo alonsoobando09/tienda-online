@@ -16,6 +16,7 @@ import {
   PackageCheck,
   PackageOpen,
   Receipt,
+  ShieldCheck,
   ShoppingCart,
   UserRoundPlus,
   Users,
@@ -26,6 +27,13 @@ const navItems = [
   { href: "/admin/productos", label: "Productos", icon: Package, roles: ["admin"] },
   { href: "/admin/clientes", label: "Clientes", icon: UserRoundPlus, roles: ["admin"] },
   { href: "/admin/rutas", label: "Rutas", icon: Map, roles: ["admin"] },
+  { href: "/admin/mapa", label: "Mapa", icon: Map, roles: ["admin"] },
+  {
+    href: "/admin/autorizaciones",
+    label: "Autorizaciones",
+    icon: ShieldCheck,
+    roles: ["admin"],
+  },
   {
     href: "/admin/despachos",
     label: "Despachos",
