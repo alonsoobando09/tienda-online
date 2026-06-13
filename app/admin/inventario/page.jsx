@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
+import { db } from "@/lib/firebase";
+import { collection, getDocs } from "firebase/firestore";
 
 const money = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -12,15 +14,28 @@ const money = new Intl.NumberFormat("es-CO", {
 
 export default function InventarioPage() {
   const [productos, setProductos] = useState([]);
+  const [movimientos, setMovimientos] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
 
-    fetch("/api/productos")
-      .then((res) => res.json())
-      .then((data) => {
-        if (active) setProductos(data);
+    Promise.all([
+      fetch("/api/productos").then((res) => res.json()),
+      getDocs(collection(db, "kardex")),
+    ])
+      .then(([productosData, kardexSnap]) => {
+        if (!active) return;
+        setProductos(productosData);
+        setMovimientos(
+          kardexSnap.docs
+            .map((docu) => ({ id: docu.id, ...docu.data() }))
+            .sort((a, b) =>
+              String(b.createdAt?.seconds || "").localeCompare(
+                String(a.createdAt?.seconds || "")
+              )
+            )
+        );
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -107,6 +122,41 @@ export default function InventarioPage() {
               </tbody>
             </table>
           )}
+        </section>
+
+        <section className="admin-card" style={{ marginTop: 16 }}>
+          <h2>Ultimos movimientos de kardex</h2>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Producto</th>
+                <th>Tipo</th>
+                <th>Cantidad</th>
+                <th>Costo</th>
+                <th>Referencia</th>
+              </tr>
+            </thead>
+            <tbody>
+              {movimientos.slice(0, 12).map((movimiento) => (
+                <tr key={movimiento.id}>
+                  <td>{movimiento.fecha || ""}</td>
+                  <td>{movimiento.productoNombre || "Producto"}</td>
+                  <td>
+                    <span className="admin-pill">{movimiento.tipo || "movimiento"}</span>
+                  </td>
+                  <td>{movimiento.cantidad || 0}</td>
+                  <td>{money.format(Number(movimiento.costo) || 0)}</td>
+                  <td>{movimiento.proveedor || movimiento.ruta || movimiento.referenciaId}</td>
+                </tr>
+              ))}
+              {movimientos.length === 0 && (
+                <tr>
+                  <td colSpan="6">Aun no hay movimientos de inventario.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </section>
       </AdminShell>
     </AdminGuard>

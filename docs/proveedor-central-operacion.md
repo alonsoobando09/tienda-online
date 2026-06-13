@@ -162,6 +162,43 @@ Cada producto debe tener:
 - Proveedor.
 - Estado activo/inactivo.
 
+## Proveedores
+
+La base de proveedores permite controlar a quien se compra y bajo que
+condiciones.
+
+Cada proveedor debe tener:
+
+- Nombre.
+- Contacto.
+- Telefono.
+- Correo.
+- Direccion.
+- Ciudad.
+- Metodo de pago: contado, credito, transferencia u otro.
+- Cupo de credito.
+- Dias de credito.
+- Categorias o productos que vende.
+- Estado: activo, pausado o inactivo.
+- Observaciones.
+
+Reglas:
+
+- Solo proveedores activos o pausados aparecen disponibles en compras.
+- Al seleccionar un proveedor en compras, el sistema completa nombre y metodo de
+  pago.
+- Al seleccionar un proveedor en compras, se muestra primero el catalogo de
+  productos que ese proveedor vende.
+- Desde compras se puede alternar entre ver solo productos del proveedor o ver
+  todos los productos.
+- Si el proveedor aun no esta creado, se puede escribir manualmente en compras.
+- Las compras guardan `proveedorId` cuando se selecciona un proveedor registrado.
+- Esto permite consultar compras, costos y movimientos por proveedor.
+- En la pantalla de proveedores se puede ver cuantos productos tiene asociado
+  cada proveedor y abrir el listado de productos que vende.
+- Cuando se crea un producto nuevo desde compras, queda enlazado al proveedor
+  seleccionado.
+
 En venta:
 
 - Punto verde: precio minimo permitido.
@@ -180,10 +217,50 @@ La bodega controla:
 - Kardex por producto.
 - Productos vencidos, danados o devueltos por mal estado.
 
+Compras / entradas:
+
+- Se registra fecha de compra.
+- Se registra proveedor.
+- Se registra factura o remision del proveedor.
+- Se registra el total que aparece en la factura del proveedor.
+- Se define si fue contado, credito, transferencia u otro metodo.
+- Se agregan productos por lector de codigo, SKU o busqueda manual.
+- En tablet o celular compatible se puede usar la camara para leer el codigo de
+  barras y agregar el producto.
+- Cada producto lleva cantidad y costo unitario.
+- Cada linea muestra subtotal calculado: cantidad por costo unitario.
+- La pantalla compara total calculado contra total de la factura del proveedor.
+- Si hay diferencia, se muestra para corregir antes de guardar y evitar perder
+  plata por facturas mal sumadas o mal multiplicadas.
+- Desde la compra se puede crear un producto nuevo rapido si no existe.
+- Desde la compra se pueden actualizar costo, precio minimo, precio detal y
+  precio maximo antes de guardar.
+- Al guardar la compra, el stock del producto aumenta automaticamente.
+- El costo del producto queda actualizado con el ultimo costo de compra.
+- Los precios editados en la compra actualizan el producto para futuras ventas.
+- Cada entrada genera movimiento de kardex con tipo `entrada_compra`.
+- La compra queda guardada como soporte historico para contabilidad e inventario.
+- Si la compra se marca como credito, se crea automaticamente una cuenta por
+  pagar al proveedor con fecha de vencimiento, total, abonado, saldo y estado.
+
+Cuentas por pagar:
+
+- Nacen de compras a credito.
+- Guardan proveedor, factura, fecha de compra y fecha de vencimiento.
+- Permiten registrar abonos parciales.
+- Cuando el saldo llega a cero quedan como pagadas.
+- Si pasan la fecha de vencimiento y tienen saldo pendiente se muestran como
+  vencidas.
+- Sirven para saber cuanto se debe a proveedores y evitar olvidar pagos.
+
 Despacho:
 
 - Puede hacerse con pistola/lector de codigo de barras.
 - Tambien puede hacerse desde tablet o celular buscando productos.
+- En celulares/tablets compatibles, se puede usar la camara para leer codigos de
+  barras desde Compras y Despachos.
+- Si el navegador no soporta lectura nativa de codigos, se mantiene el campo
+  manual y el lector fisico como respaldo.
 - Cada despacho queda asociado a fecha, ruta, carterista y ayudante.
 - El despacho descuenta inventario cuando se guarda.
 - Cada salida genera movimiento de kardex.
@@ -206,9 +283,21 @@ Recibo al final del dia:
 - La recepcion muestra cantidad de facturas, valor facturado, pagos de productos
   del dia y fiado de la ruta.
 - Se registra dinero entregado, gastos de ruta y prestamos.
+- El dinero recibido se separa por metodo: efectivo, Nequi, Daviplata,
+  Bancolombia y otros pagos.
+- Se puede guardar referencia o comprobante de consignaciones.
 - Se calcula descuadre de dinero comparando plata entregada + gastos/prestamos
   contra valor de productos dejados.
 - Los faltantes de producto quedan separados de los descuadres de plata.
+- La liquidacion muestra el detalle de productos faltantes: salio, dejado,
+  devuelto, faltante y costo faltante.
+
+Kardex:
+
+- Cada compra genera entrada positiva.
+- Cada despacho genera salida negativa.
+- Cada recepcion genera entrada por devolucion.
+- Inventario muestra los ultimos movimientos para auditar cambios de stock.
 
 ## Ruta diaria
 
@@ -275,6 +364,8 @@ La liquidacion diaria debe mostrar:
 - Valor total de productos dejados ese dia.
 - Total de facturas del dia.
 - Total cobrado.
+- Total por metodo de pago: efectivo, Nequi, Daviplata, Bancolombia y otros.
+- Referencia de consignaciones o comprobantes.
 - Total fiado.
 - Total abonado.
 - Total deudas de la planilla del dia.
@@ -282,6 +373,7 @@ La liquidacion diaria debe mostrar:
 - Mercancia devuelta.
 - Descuadre de plata.
 - Descuadre de productos.
+- Productos faltantes detallados por nombre y cantidad.
 - Ganancia diaria.
 
 Reglas de pago:
@@ -316,9 +408,13 @@ Debe mostrar:
 - Rutas liquidadas.
 - Valor total de productos dejados.
 - Utilidad bruta.
+- Total a pagar al equipo.
 - Pago neto de carteristas.
 - Pago neto de ayudantes.
 - Neto del administrador.
+- Utilidad despues de pagar equipo.
+- Descuentos acumulados.
+- Gastos registrados durante ruta.
 - Facturas de ruta.
 - Descuadres de dinero.
 - Faltantes de productos.
@@ -333,6 +429,16 @@ Resumen por carterista:
 - Descuentos acumulados.
 - Alertas por descuadres o faltantes.
 
+Resumen por ayudante:
+
+- Dias trabajados.
+- Rutas trabajadas.
+- Pago base semanal.
+- Bonos por clientes abiertos.
+- Pago bruto.
+- Descuentos.
+- Neto a pagar.
+
 Detalle diario:
 
 - Fecha.
@@ -343,6 +449,8 @@ Detalle diario:
 - Productos dejados.
 - Utilidad.
 - Descuadre.
+- Faltante.
+- Gastos registrados.
 - Neto del carterista.
 
 ## Dashboard administrador

@@ -116,6 +116,10 @@ export default function LiquidacionesAdminPage() {
     );
   }, [gastosRecepcion]);
 
+  const productosFaltantes = useMemo(() => {
+    return (recepcion?.items || []).filter((item) => number(item.faltante) > 0);
+  }, [recepcion]);
+
   const calculo = useMemo(() => {
     const costoProductosDejados = (recepcion?.items || []).reduce(
       (acc, item) =>
@@ -200,10 +204,25 @@ export default function LiquidacionesAdminPage() {
         costoProductosDejados: calculo.costoProductosDejados,
         utilidadBruta: calculo.utilidadBruta,
         dineroEntregado: number(recepcion.dineroEntregado),
+        pagosRuta: recepcion.pagosRuta || {
+          efectivo: number(recepcion.dineroEntregado),
+          total: number(recepcion.dineroEntregado),
+        },
         gastosRuta: number(recepcion.gastosRuta),
         prestamosRuta: number(recepcion.prestamos),
         descuadreDinero: number(recepcion.descuadreDinero),
         costoFaltante: number(recepcion.costoFaltante),
+        productosFaltantes: productosFaltantes.map((item) => ({
+          productoId: item.productoId,
+          nombre: item.nombre,
+          sku: item.sku || "",
+          cantidad: number(item.cantidad),
+          devuelto: number(item.devuelto),
+          dejado: number(item.dejado),
+          faltante: number(item.faltante),
+          costo: number(item.costo),
+          costoFaltante: number(item.costoFaltante),
+        })),
         pagoBaseAyudante: calculo.pagoBaseAyudante,
         clientesAbiertos: number(form.clientesAbiertos),
         valorClienteAbierto: number(form.valorClienteAbierto),
@@ -438,6 +457,26 @@ export default function LiquidacionesAdminPage() {
           </article>
 
           <article className="admin-card">
+            <h2>Pagos recibidos</h2>
+            <div className="liquidation-lines">
+              <span>Efectivo</span>
+              <strong>{money(recepcion?.pagosRuta?.efectivo || 0)}</strong>
+              <span>Nequi</span>
+              <strong>{money(recepcion?.pagosRuta?.nequi || 0)}</strong>
+              <span>Daviplata</span>
+              <strong>{money(recepcion?.pagosRuta?.daviplata || 0)}</strong>
+              <span>Bancolombia</span>
+              <strong>{money(recepcion?.pagosRuta?.bancolombia || 0)}</strong>
+              <span>Otros</span>
+              <strong>{money(recepcion?.pagosRuta?.otros || 0)}</strong>
+              <span>Total recibido</span>
+              <strong>{money(recepcion?.pagosRuta?.total || recepcion?.dineroEntregado || 0)}</strong>
+              <span>Referencia</span>
+              <strong>{recepcion?.pagosRuta?.referencia || "Sin referencia"}</strong>
+            </div>
+          </article>
+
+          <article className="admin-card">
             <h2>Gastos registrados</h2>
             <div className="liquidation-lines">
               <span>Carterista almuerzo</span>
@@ -472,6 +511,45 @@ export default function LiquidacionesAdminPage() {
               <strong>{money(calculo.netoAyudante)}</strong>
             </div>
           </article>
+        </section>
+
+        <section className="admin-card" style={{ marginTop: 16 }}>
+          <h2>Productos faltantes al carterista</h2>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Salio</th>
+                <th>Dejado</th>
+                <th>Devuelto</th>
+                <th>Faltante</th>
+                <th>Costo faltante</th>
+              </tr>
+            </thead>
+            <tbody>
+              {productosFaltantes.map((item) => (
+                <tr key={item.productoId}>
+                  <td>
+                    <strong>{item.nombre}</strong>
+                    <br />
+                    <small>{item.sku || "Sin codigo"}</small>
+                  </td>
+                  <td>{number(item.cantidad)}</td>
+                  <td>{number(item.dejado)}</td>
+                  <td>{number(item.devuelto)}</td>
+                  <td>
+                    <span className="debt-pill rojo">{number(item.faltante)}</span>
+                  </td>
+                  <td>{money(item.costoFaltante || 0)}</td>
+                </tr>
+              ))}
+              {productosFaltantes.length === 0 && (
+                <tr>
+                  <td colSpan="6">No hay productos faltantes en esta recepcion.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </section>
 
         <section className="admin-card" style={{ marginTop: 16 }}>

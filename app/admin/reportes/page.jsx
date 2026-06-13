@@ -112,6 +112,12 @@ export default function ReportesAdminPage() {
       netoCarteristas: sumBy(liquidacionesFiltradas, "netoCarterista"),
       netoAyudantes: sumBy(liquidacionesFiltradas, "netoAyudante"),
       netoAdministrador: sumBy(liquidacionesFiltradas, "netoAdministrador"),
+      descuentosCarteristas: sumBy(liquidacionesFiltradas, "descuentosCarterista"),
+      descuentosAyudantes: sumBy(liquidacionesFiltradas, "descuentosAyudante"),
+      gastosRegistrados: liquidacionesFiltradas.reduce(
+        (acc, item) => acc + number(item.resumenGastosRuta?.total),
+        0
+      ),
       facturas: sumBy(liquidacionesFiltradas, "totalFacturasRuta"),
     }),
     [liquidacionesFiltradas]
@@ -135,6 +141,7 @@ export default function ReportesAdminPage() {
           netoAyudante: 0,
           descuadreDinero: 0,
           costoFaltante: 0,
+          alertas: 0,
         };
 
       current.dias.add(getLiquidacionDate(item));
@@ -146,6 +153,9 @@ export default function ReportesAdminPage() {
       current.netoAyudante += number(item.netoAyudante);
       current.descuadreDinero += number(item.descuadreDinero);
       current.costoFaltante += number(item.costoFaltante);
+      if (number(item.descuadreDinero) !== 0 || number(item.costoFaltante) > 0) {
+        current.alertas += 1;
+      }
 
       grouped.set(key, current);
     });
@@ -155,6 +165,40 @@ export default function ReportesAdminPage() {
       .sort((a, b) => b.utilidadBruta - a.utilidadBruta);
   }, [liquidacionesFiltradas]);
 
+  const porAyudante = useMemo(() => {
+    const grouped = new Map();
+
+    liquidacionesFiltradas.forEach((item) => {
+      const key = item.ayudanteNombre || "Sin ayudante";
+      const current =
+        grouped.get(key) ||
+        {
+          nombre: key,
+          dias: new Set(),
+          rutas: 0,
+          pagoBase: 0,
+          bonoClientes: 0,
+          bruto: 0,
+          descuentos: 0,
+          neto: 0,
+        };
+
+      current.dias.add(getLiquidacionDate(item));
+      current.rutas += 1;
+      current.pagoBase += number(item.pagoBaseAyudante);
+      current.bonoClientes += number(item.bonoClientes);
+      current.bruto += number(item.totalAyudanteBruto);
+      current.descuentos += number(item.descuentosAyudante);
+      current.neto += number(item.netoAyudante);
+
+      grouped.set(key, current);
+    });
+
+    return [...grouped.values()]
+      .map((item) => ({ ...item, diasTrabajados: item.dias.size }))
+      .sort((a, b) => b.neto - a.neto);
+  }, [liquidacionesFiltradas]);
+
   const alertas = useMemo(
     () =>
       liquidacionesFiltradas.filter(
@@ -162,6 +206,22 @@ export default function ReportesAdminPage() {
       ),
     [liquidacionesFiltradas]
   );
+
+  const cierreSemanal = useMemo(() => {
+    const totalPagosEquipo = resumen.netoCarteristas + resumen.netoAyudantes;
+    const totalAlertas = alertas.length;
+
+    return {
+      totalPagosEquipo,
+      utilidadDespuesEquipo: resumen.utilidadBruta - totalPagosEquipo,
+      totalDescuentos:
+        resumen.descuentosCarteristas + resumen.descuentosAyudantes,
+      estado:
+        totalAlertas > 0
+          ? `${totalAlertas} alerta${totalAlertas === 1 ? "" : "s"} por revisar`
+          : "Semana sin alertas",
+    };
+  }, [alertas.length, resumen]);
 
   function updateFilter(field, value) {
     setFilters((current) => ({ ...current, [field]: value }));
@@ -245,6 +305,41 @@ export default function ReportesAdminPage() {
           </article>
         </section>
 
+        <section className="admin-card weekly-close-card">
+          <div className="admin-section-title">
+            <div>
+              <h2>Cierre semanal operativo</h2>
+              <p>Resumen para pagar equipo, revisar alertas y cerrar caja.</p>
+            </div>
+          </div>
+          <div className="weekly-close-grid">
+            <div>
+              <span>Total a pagar equipo</span>
+              <strong>{money(cierreSemanal.totalPagosEquipo)}</strong>
+            </div>
+            <div>
+              <span>Neto administrador</span>
+              <strong>{money(resumen.netoAdministrador)}</strong>
+            </div>
+            <div>
+              <span>Utilidad despues de equipo</span>
+              <strong>{money(cierreSemanal.utilidadDespuesEquipo)}</strong>
+            </div>
+            <div>
+              <span>Descuentos acumulados</span>
+              <strong>{money(cierreSemanal.totalDescuentos)}</strong>
+            </div>
+            <div>
+              <span>Gastos registrados</span>
+              <strong>{money(resumen.gastosRegistrados)}</strong>
+            </div>
+            <div>
+              <span>Estado</span>
+              <strong>{cierreSemanal.estado}</strong>
+            </div>
+          </div>
+        </section>
+
         <section className="report-grid">
           <article className="admin-card">
             <div className="admin-section-title">
@@ -265,6 +360,7 @@ export default function ReportesAdminPage() {
                   <th>Utilidad</th>
                   <th>Neto</th>
                   <th>Descuentos</th>
+                  <th>Alertas</th>
                 </tr>
               </thead>
               <tbody>
@@ -277,11 +373,12 @@ export default function ReportesAdminPage() {
                     <td>{money(item.utilidadBruta)}</td>
                     <td>{money(item.netoCarterista)}</td>
                     <td>{money(item.descuentosCarterista)}</td>
+                    <td>{item.alertas}</td>
                   </tr>
                 ))}
                 {porCarterista.length === 0 && (
                   <tr>
-                    <td colSpan="7">No hay liquidaciones en este periodo.</td>
+                    <td colSpan="8">No hay liquidaciones en este periodo.</td>
                   </tr>
                 )}
               </tbody>
@@ -295,6 +392,8 @@ export default function ReportesAdminPage() {
               <strong>{resumen.facturas}</strong>
               <span>Pago neto ayudantes</span>
               <strong>{money(resumen.netoAyudantes)}</strong>
+              <span>Descuentos ayudantes</span>
+              <strong>{money(resumen.descuentosAyudantes)}</strong>
               <span>Neto administrador</span>
               <strong>{money(resumen.netoAdministrador)}</strong>
               <span>Descuadre dinero</span>
@@ -303,6 +402,49 @@ export default function ReportesAdminPage() {
               <strong>{money(resumen.faltantes)}</strong>
             </div>
           </article>
+        </section>
+
+        <section className="admin-card" style={{ marginTop: 16 }}>
+          <div className="admin-section-title">
+            <div>
+              <h2>Cierre por ayudante</h2>
+              <p>Pago base, clientes abiertos, descuentos y neto semanal.</p>
+            </div>
+          </div>
+
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Ayudante</th>
+                <th>Dias</th>
+                <th>Rutas</th>
+                <th>Pago base</th>
+                <th>Clientes abiertos</th>
+                <th>Bruto</th>
+                <th>Descuentos</th>
+                <th>Neto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {porAyudante.map((item) => (
+                <tr key={item.nombre}>
+                  <td>{item.nombre}</td>
+                  <td>{item.diasTrabajados}</td>
+                  <td>{item.rutas}</td>
+                  <td>{money(item.pagoBase)}</td>
+                  <td>{money(item.bonoClientes)}</td>
+                  <td>{money(item.bruto)}</td>
+                  <td>{money(item.descuentos)}</td>
+                  <td>{money(item.neto)}</td>
+                </tr>
+              ))}
+              {porAyudante.length === 0 && (
+                <tr>
+                  <td colSpan="8">No hay ayudantes para este periodo.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </section>
 
         <section className="admin-card" style={{ marginTop: 16 }}>
@@ -318,6 +460,8 @@ export default function ReportesAdminPage() {
                 <th>Productos</th>
                 <th>Utilidad</th>
                 <th>Descuadre</th>
+                <th>Faltante</th>
+                <th>Gastos ruta</th>
                 <th>Neto carterista</th>
               </tr>
             </thead>
@@ -332,12 +476,14 @@ export default function ReportesAdminPage() {
                   <td>{money(item.valorProductosDejados)}</td>
                   <td>{money(item.utilidadBruta)}</td>
                   <td>{money(item.descuadreDinero)}</td>
+                  <td>{money(item.costoFaltante)}</td>
+                  <td>{money(item.resumenGastosRuta?.total || 0)}</td>
                   <td>{money(item.netoCarterista)}</td>
                 </tr>
               ))}
               {liquidacionesFiltradas.length === 0 && (
                 <tr>
-                  <td colSpan="9">No hay datos para mostrar.</td>
+                  <td colSpan="11">No hay datos para mostrar.</td>
                 </tr>
               )}
             </tbody>

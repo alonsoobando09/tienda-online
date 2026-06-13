@@ -8,6 +8,7 @@ import {
   Boxes,
   Calculator,
   ClipboardList,
+  CreditCard,
   FileText,
   Home,
   HandCoins,
@@ -15,9 +16,11 @@ import {
   Package,
   PackageCheck,
   PackageOpen,
+  PackagePlus,
   Receipt,
   ShieldCheck,
   ShoppingCart,
+  Truck,
   UserRoundPlus,
   Users,
 } from "lucide-react";
@@ -25,6 +28,7 @@ import {
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: BarChart3, roles: ["admin"] },
   { href: "/admin/productos", label: "Productos", icon: Package, roles: ["admin"] },
+  { href: "/admin/proveedores", label: "Proveedores", icon: Truck, roles: ["admin"] },
   { href: "/admin/clientes", label: "Clientes", icon: UserRoundPlus, roles: ["admin"] },
   { href: "/admin/rutas", label: "Rutas", icon: Map, roles: ["admin"] },
   { href: "/admin/mapa", label: "Mapa", icon: Map, roles: ["admin"] },
@@ -41,6 +45,12 @@ const navItems = [
     roles: ["admin", "bodega"],
   },
   {
+    href: "/admin/compras",
+    label: "Compras",
+    icon: PackagePlus,
+    roles: ["admin", "bodega"],
+  },
+  {
     href: "/admin/recepciones",
     label: "Recepcion",
     icon: PackageOpen,
@@ -48,6 +58,7 @@ const navItems = [
   },
   { href: "/admin/liquidaciones", label: "Liquidacion", icon: HandCoins, roles: ["admin"] },
   { href: "/admin/reportes", label: "Reportes", icon: ClipboardList, roles: ["admin"] },
+  { href: "/admin/cuentas-pagar", label: "Por pagar", icon: CreditCard, roles: ["admin"] },
   { href: "/admin/inventario", label: "Inventario", icon: Boxes, roles: ["admin", "bodega"] },
   { href: "/admin/pedidos", label: "Pedidos", icon: ShoppingCart, roles: ["admin"] },
   { href: "/admin/facturas", label: "Facturas", icon: FileText, roles: ["admin"] },

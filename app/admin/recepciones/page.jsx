@@ -18,7 +18,12 @@ import { ClipboardCheck, Save } from "lucide-react";
 const today = new Date().toISOString().slice(0, 10);
 
 const emptyCash = {
-  dineroEntregado: "",
+  efectivo: "",
+  nequi: "",
+  daviplata: "",
+  bancolombia: "",
+  otrosPagos: "",
+  referenciaPagos: "",
   gastosRuta: "",
   prestamos: "",
   observaciones: "",
@@ -125,8 +130,15 @@ export default function RecepcionesAdminPage() {
     );
   }, [items]);
 
+  const totalPagosRecibidos =
+    Number(cash.efectivo || 0) +
+    Number(cash.nequi || 0) +
+    Number(cash.daviplata || 0) +
+    Number(cash.bancolombia || 0) +
+    Number(cash.otrosPagos || 0);
+
   const descuadreDinero =
-    Number(cash.dineroEntregado || 0) +
+    totalPagosRecibidos +
     Number(cash.gastosRuta || 0) +
     Number(cash.prestamos || 0) -
     resumen.valorDejado;
@@ -232,7 +244,16 @@ export default function RecepcionesAdminPage() {
         totalFaltante: resumen.faltante,
         valorProductosDejados: resumen.valorDejado,
         costoFaltante: resumen.costoFaltante,
-        dineroEntregado: Number(cash.dineroEntregado) || 0,
+        dineroEntregado: totalPagosRecibidos,
+        pagosRuta: {
+          efectivo: Number(cash.efectivo) || 0,
+          nequi: Number(cash.nequi) || 0,
+          daviplata: Number(cash.daviplata) || 0,
+          bancolombia: Number(cash.bancolombia) || 0,
+          otros: Number(cash.otrosPagos) || 0,
+          referencia: cash.referenciaPagos.trim(),
+          total: totalPagosRecibidos,
+        },
         gastosRuta: Number(cash.gastosRuta) || 0,
         prestamos: Number(cash.prestamos) || 0,
         descuadreDinero,
@@ -321,7 +342,7 @@ export default function RecepcionesAdminPage() {
           <article className="admin-card admin-stat-red">
             <h3>Descuadre</h3>
             <h2>{money(descuadreDinero)}</h2>
-            <p>Plata entregada + gastos - dejado.</p>
+            <p>Pagos + gastos - dejado.</p>
           </article>
         </section>
 
@@ -372,11 +393,51 @@ export default function RecepcionesAdminPage() {
               </select>
             </label>
             <label>
-              Dinero entregado
+              Efectivo entregado
               <input
                 type="number"
-                value={cash.dineroEntregado}
-                onChange={(e) => updateCash("dineroEntregado", e.target.value)}
+                value={cash.efectivo}
+                onChange={(e) => updateCash("efectivo", e.target.value)}
+              />
+            </label>
+            <label>
+              Nequi
+              <input
+                type="number"
+                value={cash.nequi}
+                onChange={(e) => updateCash("nequi", e.target.value)}
+              />
+            </label>
+            <label>
+              Daviplata
+              <input
+                type="number"
+                value={cash.daviplata}
+                onChange={(e) => updateCash("daviplata", e.target.value)}
+              />
+            </label>
+            <label>
+              Bancolombia
+              <input
+                type="number"
+                value={cash.bancolombia}
+                onChange={(e) => updateCash("bancolombia", e.target.value)}
+              />
+            </label>
+            <label>
+              Otros pagos
+              <input
+                type="number"
+                value={cash.otrosPagos}
+                onChange={(e) => updateCash("otrosPagos", e.target.value)}
+              />
+            </label>
+            <label>
+              Referencia pagos
+              <input
+                value={cash.referenciaPagos}
+                onChange={(e) => updateCash("referenciaPagos", e.target.value)}
+                placeholder="Comprobante, banco o nota"
               />
             </label>
             <label>
@@ -395,6 +456,20 @@ export default function RecepcionesAdminPage() {
                 onChange={(e) => updateCash("prestamos", e.target.value)}
               />
             </label>
+            <div className="sale-summary" style={{ gridColumn: "1 / -1" }}>
+              <span>Total pagos recibidos</span>
+              <strong>{money(totalPagosRecibidos)}</strong>
+              <span>Valor productos dejados</span>
+              <strong>{money(resumen.valorDejado)}</strong>
+              <span>Gastos + prestamos</span>
+              <strong>
+                {money(
+                  (Number(cash.gastosRuta) || 0) + (Number(cash.prestamos) || 0)
+                )}
+              </strong>
+              <span>Descuadre dinero</span>
+              <strong>{money(descuadreDinero)}</strong>
+            </div>
             <label style={{ gridColumn: "1 / -1" }}>
               Observaciones
               <textarea

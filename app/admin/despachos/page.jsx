@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
+import BarcodeCameraScanner from "@/app/components/BarcodeCameraScanner";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -126,9 +127,8 @@ export default function DespachosAdminPage() {
     });
   }
 
-  function agregarPorCodigo(e) {
-    e.preventDefault();
-    const code = barcode.trim().toLowerCase();
+  function agregarPorCodigoTexto(rawCode) {
+    const code = String(rawCode || "").trim().toLowerCase();
     if (!code) return;
 
     const producto = productos.find(
@@ -144,6 +144,11 @@ export default function DespachosAdminPage() {
 
     agregarProducto(producto);
     setBarcode("");
+  }
+
+  function agregarPorCodigo(e) {
+    e.preventDefault();
+    agregarPorCodigoTexto(barcode);
   }
 
   function updateItem(productoId, field, value) {
@@ -368,6 +373,13 @@ export default function DespachosAdminPage() {
                 Agregar
               </button>
             </form>
+
+            <BarcodeCameraScanner
+              onDetected={(code) => {
+                setBarcode(code);
+                agregarPorCodigoTexto(code);
+              }}
+            />
 
             <input
               placeholder="Buscar por nombre, categoria o proveedor"
