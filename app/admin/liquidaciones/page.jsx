@@ -120,10 +120,14 @@ export default function LiquidacionesAdminPage() {
     return (recepcion?.items || []).filter((item) => number(item.faltante) > 0);
   }, [recepcion]);
 
+  const diferenciasProducto = useMemo(() => {
+    return recepcion?.diferenciasProducto || [];
+  }, [recepcion]);
+
   const calculo = useMemo(() => {
     const costoProductosDejados = (recepcion?.items || []).reduce(
       (acc, item) =>
-        acc + number(item.dejado) * number(item.costo),
+        acc + number(item.dejadoFacturado ?? item.dejado) * number(item.costo),
       0
     );
     const valorProductosDejados = number(recepcion?.valorProductosDejados);
@@ -139,7 +143,8 @@ export default function LiquidacionesAdminPage() {
       number(form.carteristaAlmuerzo) +
       number(form.carteristaPrestamos) +
       number(form.carteristaConsumos) +
-      Math.max(number(recepcion?.descuadreDinero) * -1, 0) +
+      (number(recepcion?.dineroFaltante) ||
+        Math.max(number(recepcion?.descuadreDinero) * -1, 0)) +
       number(recepcion?.costoFaltante);
     const descuentosAyudante =
       number(form.ayudanteAlmuerzo) +
@@ -158,6 +163,12 @@ export default function LiquidacionesAdminPage() {
       mitadCarterista,
       descuentosCarterista,
       descuentosAyudante,
+      dineroFaltante:
+        number(recepcion?.dineroFaltante) ||
+        Math.max(number(recepcion?.descuadreDinero) * -1, 0),
+      dineroSobrante:
+        number(recepcion?.dineroSobrante) ||
+        Math.max(number(recepcion?.descuadreDinero), 0),
       netoCarterista: mitadCarterista - descuentosCarterista,
       netoAyudante: totalAyudanteBruto - descuentosAyudante,
       netoAdministrador: mitadAdministrador,
@@ -200,6 +211,18 @@ export default function LiquidacionesAdminPage() {
         ayudanteId: recepcion.ayudanteId || "",
         ayudanteNombre: recepcion.ayudanteNombre || "",
         totalFacturasRuta: number(recepcion.totalFacturasRuta),
+        totalGestionesRuta: number(recepcion.totalGestionesRuta),
+        clientesVisitadosRuta: number(recepcion.clientesVisitadosRuta),
+        clientesNoDisponiblesRuta: number(recepcion.clientesNoDisponiblesRuta),
+        clientesRiesgoRuta: number(recepcion.clientesRiesgoRuta),
+        deudaGestionadaRuta: number(recepcion.deudaGestionadaRuta),
+        resumenGestionesRuta: recepcion.resumenGestionesRuta || {},
+        gestionesRutaIds: recepcion.gestionesRutaIds || [],
+        auditoriaEstado: recepcion.auditoriaEstado || "",
+        auditoriaAlertas: recepcion.auditoriaAlertas || [],
+        diferenciasProducto,
+        diferenciaDejadoFacturado: number(recepcion.diferenciaDejadoFacturado),
+        totalDejadoFacturado: number(recepcion.totalDejadoFacturado),
         valorProductosDejados: calculo.valorProductosDejados,
         costoProductosDejados: calculo.costoProductosDejados,
         utilidadBruta: calculo.utilidadBruta,
@@ -211,6 +234,8 @@ export default function LiquidacionesAdminPage() {
         gastosRuta: number(recepcion.gastosRuta),
         prestamosRuta: number(recepcion.prestamos),
         descuadreDinero: number(recepcion.descuadreDinero),
+        dineroFaltante: calculo.dineroFaltante,
+        dineroSobrante: calculo.dineroSobrante,
         costoFaltante: number(recepcion.costoFaltante),
         productosFaltantes: productosFaltantes.map((item) => ({
           productoId: item.productoId,
@@ -449,11 +474,35 @@ export default function LiquidacionesAdminPage() {
               <strong>{money(calculo.costoProductosDejados)}</strong>
               <span>Descuadre dinero</span>
               <strong>{money(recepcion?.descuadreDinero || 0)}</strong>
+              <span>Plata faltante</span>
+              <strong>{money(calculo.dineroFaltante)}</strong>
+              <span>Plata sobrante</span>
+              <strong>{money(calculo.dineroSobrante)}</strong>
               <span>Costo faltante productos</span>
               <strong>{money(recepcion?.costoFaltante || 0)}</strong>
               <span>Facturas ruta</span>
               <strong>{recepcion?.totalFacturasRuta || 0}</strong>
+              <span>Gestiones ruta</span>
+              <strong>{recepcion?.totalGestionesRuta || 0}</strong>
+              <span>Visitados / no disponibles</span>
+              <strong>
+                {recepcion?.clientesVisitadosRuta || 0} /{" "}
+                {recepcion?.clientesNoDisponiblesRuta || 0}
+              </strong>
+              <span>Riesgo ruta</span>
+              <strong>{recepcion?.clientesRiesgoRuta || 0}</strong>
+              <span>Estado auditoria</span>
+              <strong>{recepcion?.auditoriaEstado || "Sin auditoria"}</strong>
+              <span>Diferencia surtido</span>
+              <strong>{recepcion?.diferenciaDejadoFacturado || 0}</strong>
             </div>
+            {recepcion?.auditoriaAlertas?.length > 0 && (
+              <div className="audit-alerts" style={{ marginTop: 12 }}>
+                {recepcion.auditoriaAlertas.map((alerta) => (
+                  <span key={alerta}>{alerta}</span>
+                ))}
+              </div>
+            )}
           </article>
 
           <article className="admin-card">
@@ -503,6 +552,10 @@ export default function LiquidacionesAdminPage() {
               <strong>{money(calculo.gananciaDespuesAyudante)}</strong>
               <span>Mitad carterista</span>
               <strong>{money(calculo.mitadCarterista)}</strong>
+              <span>Plata faltante</span>
+              <strong>{money(calculo.dineroFaltante)}</strong>
+              <span>Plata sobrante</span>
+              <strong>{money(calculo.dineroSobrante)}</strong>
               <span>Descuentos carterista</span>
               <strong>{money(calculo.descuentosCarterista)}</strong>
               <span>Neto carterista</span>
@@ -553,6 +606,50 @@ export default function LiquidacionesAdminPage() {
         </section>
 
         <section className="admin-card" style={{ marginTop: 16 }}>
+          <h2>Auditoria completa de surtido</h2>
+          <p className="admin-help">
+            Compara lo dejado fisicamente contra lo facturado por clientes.
+          </p>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Salio</th>
+                <th>Devuelto</th>
+                <th>Fisico</th>
+                <th>Facturado</th>
+                <th>Diferencia</th>
+                <th>Tipo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {diferenciasProducto.map((item) => (
+                <tr key={item.productoId}>
+                  <td>
+                    <strong>{item.nombre}</strong>
+                    <br />
+                    <small>{item.sku || "Sin codigo"}</small>
+                  </td>
+                  <td>{number(item.salio)}</td>
+                  <td>{number(item.devuelto)}</td>
+                  <td>{number(item.dejadoFisico)}</td>
+                  <td>{number(item.facturado)}</td>
+                  <td>
+                    <span className="debt-pill rojo">{number(item.diferencia)}</span>
+                  </td>
+                  <td>{item.tipo || "Diferencia"}</td>
+                </tr>
+              ))}
+              {diferenciasProducto.length === 0 && (
+                <tr>
+                  <td colSpan="7">La auditoria de surtido esta cuadrada.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </section>
+
+        <section className="admin-card" style={{ marginTop: 16 }}>
           <h2>Liquidaciones recientes</h2>
           <table className="admin-table">
             <thead>
@@ -561,6 +658,9 @@ export default function LiquidacionesAdminPage() {
                 <th>Ruta</th>
                 <th>Carterista</th>
                 <th>Utilidad</th>
+                <th>Gestiones</th>
+                <th>Riesgo</th>
+                <th>Falta plata</th>
                 <th>Carterista</th>
                 <th>Ayudante</th>
               </tr>
@@ -572,6 +672,20 @@ export default function LiquidacionesAdminPage() {
                   <td>{item.ruta}</td>
                   <td>{item.carteristaNombre || "Sin carterista"}</td>
                   <td>{money(item.utilidadBruta || 0)}</td>
+                  <td>
+                    {(item.clientesVisitadosRuta || 0)} /{" "}
+                    {(item.totalGestionesRuta || 0)}
+                  </td>
+                  <td>
+                    <span
+                      className={`debt-pill ${
+                        item.clientesRiesgoRuta ? "gris" : "verde"
+                      }`}
+                    >
+                      {item.clientesRiesgoRuta || 0}
+                    </span>
+                  </td>
+                  <td>{money(item.dineroFaltante || Math.max((Number(item.descuadreDinero) || 0) * -1, 0))}</td>
                   <td>{money(item.netoCarterista || 0)}</td>
                   <td>{money(item.netoAyudante || 0)}</td>
                 </tr>

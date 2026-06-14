@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, X } from "lucide-react";
 
 export default function BarcodeCameraScanner({ onDetected }) {
@@ -10,6 +10,7 @@ export default function BarcodeCameraScanner({ onDetected }) {
   const detectorRef = useRef(null);
   const [active, setActive] = useState(false);
   const [message, setMessage] = useState("");
+  const [streamReady, setStreamReady] = useState(false);
 
   function stopScanner() {
     if (frameRef.current) cancelAnimationFrame(frameRef.current);
@@ -20,10 +21,11 @@ export default function BarcodeCameraScanner({ onDetected }) {
       streamRef.current = null;
     }
 
+    setStreamReady(false);
     setActive(false);
   }
 
-  async function scanFrame() {
+  const scanFrame = useCallback(async function scanFrame() {
     const video = videoRef.current;
     const detector = detectorRef.current;
 
@@ -47,7 +49,7 @@ export default function BarcodeCameraScanner({ onDetected }) {
     }
 
     frameRef.current = requestAnimationFrame(scanFrame);
-  }
+  }, [onDetected]);
 
   async function startScanner() {
     setMessage("");
@@ -82,19 +84,34 @@ export default function BarcodeCameraScanner({ onDetected }) {
       });
 
       streamRef.current = stream;
+      setStreamReady(true);
       setActive(true);
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-
-      frameRef.current = requestAnimationFrame(scanFrame);
     } catch {
       setMessage("No se pudo abrir la camara. Revisa permisos del navegador.");
       stopScanner();
     }
   }
+
+  useEffect(() => {
+    if (!active || !streamReady || !streamRef.current || !videoRef.current) return;
+
+    let mounted = true;
+    const video = videoRef.current;
+    video.srcObject = streamRef.current;
+
+    video
+      .play()
+      .then(() => {
+        if (mounted) frameRef.current = requestAnimationFrame(scanFrame);
+      })
+      .catch(() => {
+        setMessage("La camara abrio, pero el video no pudo iniciar. Toca cerrar y abrir de nuevo.");
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [active, scanFrame, streamReady]);
 
   useEffect(() => stopScanner, []);
 

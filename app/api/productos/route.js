@@ -8,6 +8,11 @@ import {
   query,
   serverTimestamp,
 } from "firebase/firestore";
+import {
+  getProductPriceRange,
+  getProductValidationErrors,
+  normalizeProductUnit,
+} from "@/lib/productValidation";
 
 function normalizeProduct(body) {
   const imagenes = Array.isArray(body.imagenes)
@@ -17,20 +22,24 @@ function normalizeProduct(body) {
         .slice(0, 3)
     : [];
 
+  const priceRange = getProductPriceRange(body);
+
   return {
     nombre: String(body.nombre || "").trim(),
     categoria: String(body.categoria || "general").trim(),
     sku: String(body.sku || "").trim(),
     proveedor: String(body.proveedor || "").trim(),
-    unidad: String(body.unidad || "unidad").trim(),
+    unidad: normalizeProductUnit(body.unidad),
     imagen: String(body.imagen || "").trim(),
     imagenes,
     descripcion: String(body.descripcion || "").trim(),
     costo: Number(body.costo) || 0,
-    precioMayor: Number(body.precioMayor) || 0,
-    precioDetal: Number(body.precioDetal) || 0,
-    precioPacaMayor: Number(body.precioPacaMayor) || 0,
-    precioPacaDetal: Number(body.precioPacaDetal) || 0,
+    precioMayor: priceRange.precioMayor,
+    precioDetal: priceRange.precioDetal,
+    precioMinimo: priceRange.precioMinimo,
+    precioMaximo: priceRange.precioMaximo,
+    precioPacaMayor: priceRange.precioPacaMayor,
+    precioPacaDetal: priceRange.precioPacaDetal,
     unidadesPorPaca: Number(body.unidadesPorPaca) || 0,
     stock: Number(body.stock) || 0,
     stockMinimo: Number(body.stockMinimo) || 5,
@@ -64,10 +73,11 @@ export async function GET() {
 export async function POST(request) {
   try {
     const product = normalizeProduct(await request.json());
+    const errors = getProductValidationErrors(product);
 
-    if (!product.nombre) {
+    if (errors.length > 0) {
       return NextResponse.json(
-        { error: "El nombre del producto es obligatorio" },
+        { error: errors.join(" ") },
         { status: 400 }
       );
     }

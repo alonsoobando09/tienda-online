@@ -17,6 +17,11 @@ import { FileUp, ImagePlus, Save, Trash2 } from "lucide-react";
 import { categories } from "@/lib/categories";
 import { getSafeImageSrc } from "@/lib/images";
 import { uploadImageWithFallback } from "@/lib/clientImages";
+import {
+  getProductValidationErrors,
+  normalizeProductUnit,
+  productUnits,
+} from "@/lib/productValidation";
 
 const emptyForm = {
   nombre: "",
@@ -88,7 +93,7 @@ function normalizeExcelProduct(row) {
     categoria: getCategorySlug(row.category || row.categoria),
     sku,
     proveedor: String(row.proveedor || "").trim(),
-    unidad: "unidad",
+    unidad: normalizeProductUnit(row.unidad || row.unit),
     imagen: "",
     imagenes: [],
     descripcion: "",
@@ -163,6 +168,17 @@ export default function ProductosAdminPage() {
     );
   }, [filter, productos]);
 
+  const formWarnings = useMemo(() => getProductValidationErrors(form), [form]);
+  const showFormWarnings = Boolean(
+    form.nombre ||
+      form.costo ||
+      form.precioMayor ||
+      form.precioDetal ||
+      form.precioPacaMayor ||
+      form.precioPacaDetal ||
+      form.stock
+  );
+
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
   }
@@ -218,6 +234,11 @@ export default function ProductosAdminPage() {
 
     if (uploading) {
       alert("Espera a que termine de subir la imagen antes de guardar.");
+      return;
+    }
+
+    if (formWarnings.length > 0) {
+      alert(formWarnings.join("\n"));
       return;
     }
 
@@ -479,11 +500,11 @@ export default function ProductosAdminPage() {
                 value={form.unidad}
                 onChange={(e) => updateField("unidad", e.target.value)}
               >
-                <option value="unidad">Unidad</option>
-                <option value="caja">Caja</option>
-                <option value="paca">Paca</option>
-                <option value="bulto">Bulto</option>
-                <option value="kg">Kg</option>
+                {productUnits.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {unit}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -558,6 +579,17 @@ export default function ProductosAdminPage() {
               <p className="admin-help" style={{ gridColumn: "1 / -1" }}>
                 {uploadMessage}
               </p>
+            )}
+
+            {showFormWarnings && formWarnings.length > 0 && (
+              <div className="route-alert" style={{ gridColumn: "1 / -1" }}>
+                <strong>Revisa antes de guardar</strong>
+                <ul className="route-alert-list">
+                  {formWarnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             <button className="admin-button" disabled={saving || uploading}>

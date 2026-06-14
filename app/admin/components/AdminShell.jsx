@@ -7,6 +7,7 @@ import {
   BarChart3,
   Boxes,
   Calculator,
+  ClipboardCheck,
   ClipboardList,
   CreditCard,
   FileText,
@@ -30,7 +31,9 @@ const navItems = [
   { href: "/admin/productos", label: "Productos", icon: Package, roles: ["admin"] },
   { href: "/admin/proveedores", label: "Proveedores", icon: Truck, roles: ["admin"] },
   { href: "/admin/clientes", label: "Clientes", icon: UserRoundPlus, roles: ["admin"] },
+  { href: "/admin/cartera", label: "Cartera", icon: CreditCard, roles: ["admin"] },
   { href: "/admin/rutas", label: "Rutas", icon: Map, roles: ["admin"] },
+  { href: "/admin/gestiones", label: "Gestiones", icon: ClipboardCheck, roles: ["admin"] },
   { href: "/admin/mapa", label: "Mapa", icon: Map, roles: ["admin"] },
   {
     href: "/admin/autorizaciones",

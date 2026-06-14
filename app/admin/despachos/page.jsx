@@ -15,7 +15,7 @@ import {
 } from "firebase/firestore";
 import { useEmpleados } from "@/lib/useEmpleados";
 import { diasRuta, money, rutasBase } from "@/lib/operacion";
-import { Barcode, PackagePlus, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, Barcode, PackagePlus, Save, Trash2 } from "lucide-react";
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -85,15 +85,61 @@ export default function DespachosAdminPage() {
   const resumen = useMemo(() => {
     return items.reduce(
       (acc, item) => {
-        acc.cantidad += Number(item.cantidad) || 0;
-        acc.costo += (Number(item.costo) || 0) * (Number(item.cantidad) || 0);
-        acc.venta +=
-          (Number(item.precioDetal) || 0) * (Number(item.cantidad) || 0);
+        const cantidad = Number(item.cantidad) || 0;
+        const costo = (Number(item.costo) || 0) * cantidad;
+        const venta = (Number(item.precioDetal) || 0) * cantidad;
+
+        acc.cantidad += cantidad;
+        acc.costo += costo;
+        acc.venta += venta;
+        acc.ganancia += venta - costo;
+
+        if (cantidad > Number(item.stockActual || 0)) {
+          acc.sinStock += 1;
+          acc.unidadesSinStock += cantidad - Number(item.stockActual || 0);
+        }
         return acc;
       },
-      { cantidad: 0, costo: 0, venta: 0 }
+      { cantidad: 0, costo: 0, venta: 0, ganancia: 0, sinStock: 0, unidadesSinStock: 0 }
     );
   }, [items]);
+
+  const despachosPendientes = useMemo(
+    () => despachos.filter((despacho) => despacho.estado !== "recibido").length,
+    [despachos]
+  );
+
+  const margenEstimado = resumen.venta > 0 ? (resumen.ganancia / resumen.venta) * 100 : 0;
+
+  const auditoria = useMemo(() => {
+    const alertas = [];
+    const productosSinStock = items.filter(
+      (item) => Number(item.cantidad) > Number(item.stockActual || 0)
+    );
+    const productosSinCosto = items.filter((item) => Number(item.costo) <= 0);
+    const productosSinPrecio = items.filter((item) => Number(item.precioDetal) <= 0);
+
+    if (!header.carteristaId) alertas.push("Selecciona el carterista.");
+    if (!header.ayudanteId) alertas.push("Selecciona el ayudante.");
+    if (!items.length) alertas.push("Agrega productos al despacho.");
+    if (productosSinStock.length > 0) {
+      alertas.push("Hay productos con cantidad mayor al stock disponible.");
+    }
+    if (productosSinCosto.length > 0) {
+      alertas.push("Hay productos sin costo/base.");
+    }
+    if (productosSinPrecio.length > 0) {
+      alertas.push("Hay productos sin precio de venta.");
+    }
+
+    return {
+      alertas,
+      productosSinStock,
+      productosSinCosto,
+      productosSinPrecio,
+      estado: alertas.length ? "con_alertas" : "listo",
+    };
+  }, [header.ayudanteId, header.carteristaId, items]);
 
   function updateHeader(field, value) {
     setHeader((current) => ({ ...current, [field]: value }));
@@ -169,6 +215,18 @@ export default function DespachosAdminPage() {
       return;
     }
 
+    if (auditoria.productosSinStock.length > 0) {
+      alert("No puedes despachar productos por encima del stock disponible.");
+      return;
+    }
+
+    if (
+      auditoria.alertas.length > 0 &&
+      !confirm("El despacho tiene alertas. Deseas guardarlo asi?")
+    ) {
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -194,6 +252,10 @@ export default function DespachosAdminPage() {
         totalCantidad: resumen.cantidad,
         totalCosto: resumen.costo,
         totalVentaEstimada: resumen.venta,
+        gananciaEstimada: resumen.ganancia,
+        margenEstimado,
+        auditoriaEstado: auditoria.estado,
+        auditoriaAlertas: auditoria.alertas,
         estado: "despachado",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -266,6 +328,29 @@ export default function DespachosAdminPage() {
             <h3>Venta estimada</h3>
             <h2>{money(resumen.venta)}</h2>
             <p>Valor si se deja todo.</p>
+          </article>
+        </section>
+
+        <section className="admin-grid admin-kpis" style={{ marginTop: 16 }}>
+          <article className="admin-card">
+            <h3>Ganancia potencial</h3>
+            <h2>{money(resumen.ganancia)}</h2>
+            <p>Venta estimada menos base.</p>
+          </article>
+          <article className="admin-card">
+            <h3>Margen estimado</h3>
+            <h2>{margenEstimado.toFixed(1)}%</h2>
+            <p>Rentabilidad si se deja todo.</p>
+          </article>
+          <article className="admin-card admin-stat-red">
+            <h3>Alertas stock</h3>
+            <h2>{resumen.sinStock}</h2>
+            <p>{resumen.unidadesSinStock} unidades por encima.</p>
+          </article>
+          <article className="admin-card admin-stat-gold">
+            <h3>Pendientes recibir</h3>
+            <h2>{despachosPendientes}</h2>
+            <p>Despachos aun abiertos.</p>
           </article>
         </section>
 
@@ -419,53 +504,80 @@ export default function DespachosAdminPage() {
               </div>
             </div>
 
+            {auditoria.alertas.length > 0 ? (
+              <div className="audit-alerts" style={{ marginBottom: 12 }}>
+                {auditoria.alertas.map((alerta) => (
+                  <span key={alerta}>
+                    <AlertTriangle size={14} /> {alerta}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="admin-help">Despacho listo: stock y datos completos.</p>
+            )}
+
             <table className="admin-table">
               <thead>
                 <tr>
                   <th>Producto</th>
                   <th>Cantidad</th>
+                  <th>Stock</th>
                   <th>Costo</th>
                   <th>Venta</th>
+                  <th>Ganancia</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
-                  <tr key={item.productoId}>
-                    <td>
-                      <strong>{item.nombre}</strong>
-                      <br />
-                      <small>{item.sku || "Sin codigo"}</small>
-                    </td>
-                    <td>
-                      <input
-                        min="1"
-                        type="number"
-                        value={item.cantidad}
-                        onChange={(e) =>
-                          updateItem(item.productoId, "cantidad", e.target.value)
-                        }
-                        style={{ width: 82 }}
-                      />
-                    </td>
-                    <td>{money((Number(item.costo) || 0) * (Number(item.cantidad) || 0))}</td>
-                    <td>
-                      {money(
-                        (Number(item.precioDetal) || 0) *
-                          (Number(item.cantidad) || 0)
-                      )}
-                    </td>
-                    <td>
-                      <button
-                        className="admin-button danger"
-                        onClick={() => eliminarItem(item.productoId)}
-                        type="button"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
+                {items.map((item) => {
+                  const cantidad = Number(item.cantidad) || 0;
+                  const costoTotal = (Number(item.costo) || 0) * cantidad;
+                  const ventaTotal = (Number(item.precioDetal) || 0) * cantidad;
+                  const faltaStock = cantidad > Number(item.stockActual || 0);
+
+                  return (
+                    <tr key={item.productoId}>
+                      <td>
+                        <strong>{item.nombre}</strong>
+                        <br />
+                        <small>{item.sku || "Sin codigo"}</small>
+                      </td>
+                      <td>
+                        <input
+                          min="1"
+                          type="number"
+                          value={item.cantidad}
+                          onChange={(e) =>
+                            updateItem(item.productoId, "cantidad", e.target.value)
+                          }
+                          style={{ width: 82 }}
+                        />
+                      </td>
+                      <td>
+                        <span className={`debt-pill ${faltaStock ? "rojo" : "verde"}`}>
+                          {item.stockActual}
+                        </span>
+                      </td>
+                      <td>{money(costoTotal)}</td>
+                      <td>{money(ventaTotal)}</td>
+                      <td>{money(ventaTotal - costoTotal)}</td>
+                      <td>
+                        <button
+                          className="admin-icon-button danger"
+                          onClick={() => eliminarItem(item.productoId)}
+                          type="button"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!items.length && (
+                  <tr>
+                    <td colSpan="7">Agrega productos para preparar el despacho.</td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </article>
@@ -481,6 +593,8 @@ export default function DespachosAdminPage() {
                 <th>Carterista</th>
                 <th>Cantidad</th>
                 <th>Base</th>
+                <th>Venta est.</th>
+                <th>Ganancia</th>
                 <th>Estado</th>
               </tr>
             </thead>
@@ -492,6 +606,8 @@ export default function DespachosAdminPage() {
                   <td>{despacho.carteristaNombre || "Sin asignar"}</td>
                   <td>{despacho.totalCantidad || 0}</td>
                   <td>{money(despacho.totalCosto || 0)}</td>
+                  <td>{money(despacho.totalVentaEstimada || 0)}</td>
+                  <td>{money(despacho.gananciaEstimada || 0)}</td>
                   <td>
                     <span className="admin-pill">{despacho.estado || "despachado"}</span>
                   </td>

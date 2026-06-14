@@ -13,7 +13,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { money } from "@/lib/operacion";
-import { RefreshCcw, Save } from "lucide-react";
+import { AlertTriangle, RefreshCcw, Save } from "lucide-react";
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -38,6 +38,8 @@ export default function CuentasPagarPage() {
   const [filter, setFilter] = useState("pendientes");
   const [abonos, setAbonos] = useState({});
   const [notas, setNotas] = useState({});
+  const [metodos, setMetodos] = useState({});
+  const [referencias, setReferencias] = useState({});
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
 
@@ -87,11 +89,48 @@ export default function CuentasPagarPage() {
         acc.pendiente += estado !== "pagada" ? saldo : 0;
         acc.pagado += number(cuenta.abonado);
         if (estado === "vencida") acc.vencidas += 1;
+        if (number(cuenta.diferenciaFactura) !== 0) acc.facturasConDiferencia += 1;
+
+        (cuenta.pagos || []).forEach((pago) => {
+          const metodo = pago.metodo || "efectivo";
+          acc.pagosPorMetodo[metodo] =
+            (acc.pagosPorMetodo[metodo] || 0) + number(pago.valor);
+        });
         return acc;
       },
-      { total: 0, pendiente: 0, pagado: 0, vencidas: 0 }
+      {
+        total: 0,
+        pendiente: 0,
+        pagado: 0,
+        vencidas: 0,
+        facturasConDiferencia: 0,
+        pagosPorMetodo: {},
+      }
     );
   }, [cuentas]);
+
+  const alertasPrioritarias = useMemo(() => {
+    return cuentas
+      .filter((cuenta) => {
+        const estado = getCuentaEstado(cuenta);
+        return estado === "vencida" || number(cuenta.diferenciaFactura) !== 0;
+      })
+      .sort((a, b) => {
+        const estadoA = getCuentaEstado(a) === "vencida" ? 0 : 1;
+        const estadoB = getCuentaEstado(b) === "vencida" ? 0 : 1;
+        if (estadoA !== estadoB) return estadoA - estadoB;
+        return number(b.saldoPendiente) - number(a.saldoPendiente);
+      })
+      .slice(0, 5);
+  }, [cuentas]);
+
+  const pagosPorMetodo = useMemo(
+    () =>
+      Object.entries(resumen.pagosPorMetodo)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5),
+    [resumen.pagosPorMetodo]
+  );
 
   function updateAbono(id, value) {
     setAbonos((current) => ({ ...current, [id]: value }));
@@ -99,6 +138,14 @@ export default function CuentasPagarPage() {
 
   function updateNota(id, value) {
     setNotas((current) => ({ ...current, [id]: value }));
+  }
+
+  function updateMetodo(id, value) {
+    setMetodos((current) => ({ ...current, [id]: value }));
+  }
+
+  function updateReferencia(id, value) {
+    setReferencias((current) => ({ ...current, [id]: value }));
   }
 
   async function registrarAbono(cuenta) {
@@ -123,6 +170,8 @@ export default function CuentasPagarPage() {
         pagos: arrayUnion({
           fecha: today,
           valor: abonoAplicado,
+          metodo: metodos[cuenta.id] || "efectivo",
+          referencia: String(referencias[cuenta.id] || "").trim(),
           nota: String(notas[cuenta.id] || "").trim(),
         }),
         updatedAt: serverTimestamp(),
@@ -130,6 +179,8 @@ export default function CuentasPagarPage() {
 
       setAbonos((current) => ({ ...current, [cuenta.id]: "" }));
       setNotas((current) => ({ ...current, [cuenta.id]: "" }));
+      setMetodos((current) => ({ ...current, [cuenta.id]: "" }));
+      setReferencias((current) => ({ ...current, [cuenta.id]: "" }));
       await cargarCuentas();
     } catch (error) {
       console.error("Error registrando abono:", error);
@@ -174,6 +225,68 @@ export default function CuentasPagarPage() {
           </article>
         </section>
 
+        <section className="admin-grid admin-kpis" style={{ marginTop: 16 }}>
+          <article className="admin-card admin-stat-red">
+            <h3>Facturas con diferencia</h3>
+            <h2>{resumen.facturasConDiferencia}</h2>
+            <p>Revisar antes de pagar.</p>
+          </article>
+          <article className="admin-card">
+            <h3>Metodo principal</h3>
+            <h2>{pagosPorMetodo[0]?.[0] || "Sin pagos"}</h2>
+            <p>{money(pagosPorMetodo[0]?.[1] || 0)} abonado.</p>
+          </article>
+          <article className="admin-card">
+            <h3>Cuentas visibles</h3>
+            <h2>{cuentasFiltradas.length}</h2>
+            <p>Segun filtro actual.</p>
+          </article>
+          <article className="admin-card admin-stat-gold">
+            <h3>Prioridad</h3>
+            <h2>{alertasPrioritarias.length}</h2>
+            <p>Vencidas o con diferencias.</p>
+          </article>
+        </section>
+
+        {alertasPrioritarias.length > 0 && (
+          <section className="admin-card" style={{ marginTop: 16 }}>
+            <div className="admin-section-title">
+              <div>
+                <h2>Alertas para revisar antes de pagar</h2>
+                <p>Facturas vencidas o con diferencia contra el calculo.</p>
+              </div>
+              <AlertTriangle size={26} />
+            </div>
+            <div className="payable-alert-list">
+              {alertasPrioritarias.map((cuenta) => (
+                <article key={cuenta.id}>
+                  <strong>{cuenta.proveedor || "Sin proveedor"}</strong>
+                  <span>{cuenta.facturaProveedor || "Sin factura"}</span>
+                  <span>{getCuentaEstado(cuenta)}</span>
+                  <span>{money(cuenta.saldoPendiente || 0)}</span>
+                  <small>
+                    Diferencia factura: {money(cuenta.diferenciaFactura || 0)}
+                  </small>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {pagosPorMetodo.length > 0 && (
+          <section className="admin-card" style={{ marginTop: 16 }}>
+            <h2>Pagos registrados por metodo</h2>
+            <div className="payment-method-grid">
+              {pagosPorMetodo.map(([metodo, valor]) => (
+                <div key={metodo}>
+                  <span>{metodo}</span>
+                  <strong>{money(valor)}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="admin-card" style={{ marginTop: 16 }}>
           <div className="admin-section-title">
             <div>
@@ -200,6 +313,7 @@ export default function CuentasPagarPage() {
                 <th>Compra</th>
                 <th>Vence</th>
                 <th>Total</th>
+                <th>Diferencia</th>
                 <th>Abonado</th>
                 <th>Saldo</th>
                 <th>Estado</th>
@@ -212,10 +326,31 @@ export default function CuentasPagarPage() {
                 return (
                   <tr key={cuenta.id}>
                     <td>{cuenta.proveedor || "Sin proveedor"}</td>
-                    <td>{cuenta.facturaProveedor || "Sin factura"}</td>
+                    <td>
+                      {cuenta.facturaProveedor || "Sin factura"}
+                      {(cuenta.pagos || []).length > 0 && (
+                        <>
+                          <br />
+                          <small>
+                            Ultimo abono:{" "}
+                            {money((cuenta.pagos || []).at(-1)?.valor || 0)}{" "}
+                            por {(cuenta.pagos || []).at(-1)?.metodo || "efectivo"}
+                          </small>
+                        </>
+                      )}
+                    </td>
                     <td>{cuenta.fechaCompra || ""}</td>
                     <td>{cuenta.fechaVencimiento || ""}</td>
                     <td>{money(cuenta.total || 0)}</td>
+                    <td>
+                      <span
+                        className={`debt-pill ${
+                          number(cuenta.diferenciaFactura) ? "rojo" : "verde"
+                        }`}
+                      >
+                        {money(cuenta.diferenciaFactura || 0)}
+                      </span>
+                    </td>
                     <td>{money(cuenta.abonado || 0)}</td>
                     <td>{money(cuenta.saldoPendiente || 0)}</td>
                     <td>
@@ -240,6 +375,23 @@ export default function CuentasPagarPage() {
                             value={notas[cuenta.id] || ""}
                             onChange={(event) => updateNota(cuenta.id, event.target.value)}
                           />
+                          <select
+                            value={metodos[cuenta.id] || "efectivo"}
+                            onChange={(event) => updateMetodo(cuenta.id, event.target.value)}
+                          >
+                            <option value="efectivo">Efectivo</option>
+                            <option value="nequi">Nequi</option>
+                            <option value="daviplata">Daviplata</option>
+                            <option value="bancolombia">Bancolombia</option>
+                            <option value="otro">Otro</option>
+                          </select>
+                          <input
+                            placeholder="Referencia"
+                            value={referencias[cuenta.id] || ""}
+                            onChange={(event) =>
+                              updateReferencia(cuenta.id, event.target.value)
+                            }
+                          />
                           <button
                             className="admin-button"
                             disabled={savingId === cuenta.id}
@@ -257,7 +409,7 @@ export default function CuentasPagarPage() {
               })}
               {!loading && cuentasFiltradas.length === 0 && (
                 <tr>
-                  <td colSpan="9">No hay cuentas por pagar para mostrar.</td>
+                  <td colSpan="10">No hay cuentas por pagar para mostrar.</td>
                 </tr>
               )}
             </tbody>

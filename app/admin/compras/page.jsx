@@ -139,13 +139,54 @@ export default function ComprasAdminPage() {
     );
 
     const totalFactura = Number(header.totalFacturaProveedor) || 0;
+    const diferenciaFactura = totalFactura ? totalFactura - calculado.total : 0;
+    const diferenciaAbsoluta = Math.abs(diferenciaFactura);
+    const tolerancia = 100;
+    const estadoRevision =
+      !totalFactura || diferenciaAbsoluta === 0
+        ? "cuadrada"
+        : diferenciaAbsoluta <= tolerancia
+          ? "diferencia_menor"
+          : "diferencia_fuerte";
 
     return {
       ...calculado,
       totalFactura,
-      diferenciaFactura: totalFactura ? totalFactura - calculado.total : 0,
+      diferenciaFactura,
+      diferenciaAbsoluta,
+      estadoRevision,
     };
   }, [header.totalFacturaProveedor, items]);
+
+  const alertasCompra = useMemo(() => {
+    const alertas = [];
+
+    items.forEach((item) => {
+      const cantidad = Number(item.cantidad) || 0;
+      const costo = Number(item.costoUnitario) || 0;
+      const minimo = Number(item.precioMinimo) || 0;
+      const detal = Number(item.precioDetal) || 0;
+      const maximo = Number(item.precioMaximo) || 0;
+      const nombre = item.nombre || "Producto";
+
+      if (cantidad <= 0) alertas.push(`${nombre}: cantidad debe ser mayor a cero.`);
+      if (costo <= 0) alertas.push(`${nombre}: costo unitario debe ser mayor a cero.`);
+      if (minimo <= 0) alertas.push(`${nombre}: precio minimo debe ser mayor a cero.`);
+      if (detal <= 0) alertas.push(`${nombre}: precio detal debe ser mayor a cero.`);
+      if (maximo <= 0) alertas.push(`${nombre}: precio maximo debe ser mayor a cero.`);
+      if (minimo > detal) {
+        alertas.push(`${nombre}: precio minimo no puede ser mayor que precio detal.`);
+      }
+      if (detal > maximo) {
+        alertas.push(`${nombre}: precio detal no puede ser mayor que precio maximo.`);
+      }
+      if (costo > maximo) {
+        alertas.push(`${nombre}: costo supera el precio maximo de venta.`);
+      }
+    });
+
+    return alertas;
+  }, [items]);
 
   function updateHeader(field, value) {
     setHeader((current) => ({ ...current, [field]: value }));
@@ -227,7 +268,20 @@ export default function ComprasAdminPage() {
   function updateItem(productoId, field, value) {
     setItems((current) =>
       current.map((item) =>
-        item.productoId === productoId ? { ...item, [field]: value } : item
+        item.productoId === productoId
+          ? {
+              ...item,
+              [field]: [
+                "cantidad",
+                "costoUnitario",
+                "precioMinimo",
+                "precioDetal",
+                "precioMaximo",
+              ].includes(field)
+                ? Math.max(Number(value) || 0, 0)
+                : value,
+            }
+          : item
       )
     );
   }
@@ -319,6 +373,20 @@ export default function ComprasAdminPage() {
       return;
     }
 
+    if (alertasCompra.length > 0) {
+      alert(`Corrige la compra antes de guardar:\n${alertasCompra.join("\n")}`);
+      return;
+    }
+
+    if (
+      resumen.estadoRevision === "diferencia_fuerte" &&
+      !confirm(
+        "La factura del proveedor tiene una diferencia fuerte frente al calculo. Deseas guardarla con alerta?"
+      )
+    ) {
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -344,6 +412,8 @@ export default function ComprasAdminPage() {
         facturaProveedor: header.facturaProveedor.trim(),
         totalFacturaProveedor: Number(header.totalFacturaProveedor) || 0,
         diferenciaFactura: resumen.diferenciaFactura,
+        estadoRevisionFactura: resumen.estadoRevision,
+        alertaFactura: resumen.estadoRevision !== "cuadrada",
         items: cleanItems,
         totalLineas: resumen.lineas,
         totalCantidad: resumen.cantidad,
@@ -365,6 +435,9 @@ export default function ComprasAdminPage() {
           fechaCompra: header.fecha,
           fechaVencimiento: addDays(header.fecha, diasCredito),
           total: resumen.total,
+          totalFacturaProveedor: Number(header.totalFacturaProveedor) || 0,
+          diferenciaFactura: resumen.diferenciaFactura,
+          estadoRevisionFactura: resumen.estadoRevision,
           abonado: 0,
           saldoPendiente: resumen.total,
           metodoPago: header.metodoPago,
@@ -401,6 +474,7 @@ export default function ComprasAdminPage() {
           referenciaId: compraRef.id,
           proveedor: header.proveedor.trim(),
           facturaProveedor: header.facturaProveedor.trim(),
+          estadoRevisionFactura: resumen.estadoRevision,
           fecha: header.fecha,
           createdAt: serverTimestamp(),
         });
@@ -452,7 +526,13 @@ export default function ComprasAdminPage() {
           <article className="admin-card admin-stat-red">
             <h3>Diferencia factura</h3>
             <h2>{money(resumen.diferenciaFactura)}</h2>
-            <p>Factura proveedor - calculado.</p>
+            <p>
+              {resumen.estadoRevision === "cuadrada"
+                ? "Factura cuadrada."
+                : resumen.estadoRevision === "diferencia_menor"
+                  ? "Diferencia menor."
+                  : "Revisar antes de pagar."}
+            </p>
           </article>
         </section>
 
@@ -721,7 +801,16 @@ export default function ComprasAdminPage() {
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <tr key={item.productoId}>
+                  <tr
+                    className={
+                      alertasCompra.some((alerta) =>
+                        alerta.startsWith(`${item.nombre || "Producto"}:`)
+                      )
+                        ? "table-row-warning"
+                        : ""
+                    }
+                    key={item.productoId}
+                  >
                     <td>
                       <strong>{item.nombre}</strong>
                       <br />
@@ -838,7 +927,39 @@ export default function ComprasAdminPage() {
                 <span>Diferencia</span>
                 <strong>{money(resumen.diferenciaFactura)}</strong>
               </div>
+              <div
+                className={
+                  resumen.estadoRevision === "cuadrada"
+                    ? "invoice-ok"
+                    : "invoice-warning"
+                }
+              >
+                <span>Revision</span>
+                <strong>
+                  {resumen.estadoRevision === "cuadrada"
+                    ? "Cuadrada"
+                    : resumen.estadoRevision === "diferencia_menor"
+                      ? "Diferencia menor"
+                      : "Diferencia fuerte"}
+                </strong>
+              </div>
             </div>
+            {resumen.estadoRevision === "diferencia_fuerte" && (
+              <div className="route-card route-alert" style={{ marginTop: 12 }}>
+                La factura del proveedor no coincide con el calculo. Revisa
+                cantidades, costos o total antes de pagar.
+              </div>
+            )}
+            {alertasCompra.length > 0 && (
+              <div className="route-card route-alert" style={{ marginTop: 12 }}>
+                <strong>Corrige la compra antes de guardar</strong>
+                <ul className="route-alert-list">
+                  {alertasCompra.map((alerta) => (
+                    <li key={alerta}>{alerta}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </article>
         </section>
 
@@ -866,7 +987,9 @@ export default function ComprasAdminPage() {
                   <td>{money(compra.totalCompra || 0)}</td>
                   <td>{money(compra.diferenciaFactura || 0)}</td>
                   <td>
-                    <span className="admin-pill">{compra.estado || "registrada"}</span>
+                    <span className="admin-pill">
+                      {compra.estadoRevisionFactura || compra.estado || "registrada"}
+                    </span>
                   </td>
                 </tr>
               ))}

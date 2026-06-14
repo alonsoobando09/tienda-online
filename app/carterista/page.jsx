@@ -11,6 +11,7 @@ import {
   getDocs,
   serverTimestamp,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import {
   getDebtColor,
@@ -27,7 +28,10 @@ import {
   Plus,
   ReceiptText,
   Search,
+  CheckCircle2,
   Trash2,
+  UserX,
+  CircleX,
   X,
 } from "lucide-react";
 
@@ -36,6 +40,10 @@ const emptyForm = {
   telefono: "",
   direccion: "",
   local: "",
+  deudaActual: "",
+  diasDeuda: "0",
+  ordenVisita: "",
+  insertarDespuesDe: "",
 };
 
 const emptyPago = {
@@ -63,8 +71,37 @@ function getProductPrices(producto) {
   };
 }
 
+function getRouteVisitState(cliente, today) {
+  const isRisk =
+    cliente.estadoCliente === "riesgo_perdida" ||
+    cliente.estadoCliente === "perdido" ||
+    Boolean(cliente.riesgoPerdida) ||
+    Boolean(cliente.perdido);
+
+  if (isRisk) return "riesgo_perdida";
+
+  if (cliente.estadoVisitaFecha !== today) return "pendiente";
+
+  return cliente.estadoVisita || "pendiente";
+}
+
+const visitStateOrder = {
+  riesgo_perdida: 0,
+  pendiente: 1,
+  no_encontrado: 2,
+  visitado: 3,
+};
+
+const visitStateLabels = {
+  pendiente: "Pendiente",
+  visitado: "Visitado",
+  no_encontrado: "No disponible",
+  riesgo_perdida: "Riesgo",
+};
+
 function CarteristaContent() {
   const todayRouteDay = getTodayRouteDay();
+  const today = new Date().toISOString().slice(0, 10);
   const [profile, setProfile] = useState(null);
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
@@ -73,6 +110,7 @@ function CarteristaContent() {
   const [form, setForm] = useState(emptyForm);
   const [gastoForm, setGastoForm] = useState(emptyGasto);
   const [filter, setFilter] = useState("");
+  const [estadoFilter, setEstadoFilter] = useState("todos");
   const [productFilter, setProductFilter] = useState("");
   const [selectedCliente, setSelectedCliente] = useState(null);
   const [saleItems, setSaleItems] = useState([]);
@@ -154,21 +192,59 @@ function CarteristaContent() {
     return () => clearTimeout(timer);
   }, []);
 
-  const clientesRuta = useMemo(() => {
-    const term = filter.trim().toLowerCase();
-
+  const clientesRutaBase = useMemo(() => {
     return clientes
       .filter(
         (cliente) =>
           cliente.diaRuta === assignedDay && cliente.ruta === assignedRoute
       )
+      .map((cliente) => ({
+        ...cliente,
+        estadoVisitaHoy: getRouteVisitState(cliente, today),
+      }))
+      .sort((a, b) => {
+        const estadoA = visitStateOrder[a.estadoVisitaHoy] ?? 9;
+        const estadoB = visitStateOrder[b.estadoVisitaHoy] ?? 9;
+
+        if (estadoA !== estadoB) return estadoA - estadoB;
+
+        return Number(a.ordenVisita || 0) - Number(b.ordenVisita || 0);
+      });
+  }, [assignedDay, assignedRoute, clientes, today]);
+
+  const resumenRuta = useMemo(() => {
+    return clientesRutaBase.reduce(
+      (acc, cliente) => {
+        const estado = cliente.estadoVisitaHoy || "pendiente";
+        acc.total += 1;
+        acc[estado] = (acc[estado] || 0) + 1;
+        return acc;
+      },
+      {
+        total: 0,
+        pendiente: 0,
+        visitado: 0,
+        no_encontrado: 0,
+        riesgo_perdida: 0,
+      }
+    );
+  }, [clientesRutaBase]);
+
+  const clientesRuta = useMemo(() => {
+    const term = filter.trim().toLowerCase();
+
+    return clientesRutaBase
+      .filter((cliente) => {
+        if (estadoFilter === "todos") return true;
+        return cliente.estadoVisitaHoy === estadoFilter;
+      })
       .filter((cliente) => {
         if (!term) return true;
         return [cliente.nombre, cliente.telefono, cliente.direccion, cliente.local]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(term));
       });
-  }, [assignedDay, assignedRoute, clientes, filter]);
+  }, [clientesRutaBase, estadoFilter, filter]);
 
   const productosFiltrados = useMemo(() => {
     const term = productFilter.trim().toLowerCase();
@@ -205,6 +281,53 @@ function CarteristaContent() {
       deudaFinal,
     };
   }, [pago.abonoDeudaAnterior, pago.pagoProductosHoy, saleItems, selectedCliente]);
+
+  const productosCantidadInvalida = useMemo(
+    () =>
+      saleItems.filter((item) => {
+        const cantidad = Number(item.cantidad) || 0;
+        return cantidad <= 0;
+      }),
+    [saleItems]
+  );
+
+  const productosPrecioInvalido = useMemo(
+    () =>
+      saleItems.filter((item) => {
+        const precio = Number(item.precio) || 0;
+        const minimo = Number(item.minimo) || 0;
+        const maximo = Number(item.maximo) || 0;
+
+        return precio < minimo || precio > maximo;
+      }),
+    [saleItems]
+  );
+
+  const bloqueosVenta = useMemo(() => {
+    const errores = [];
+
+    if (productosCantidadInvalida.length > 0) {
+      errores.push("Hay productos con cantidad cero o invalida.");
+    }
+
+    if (productosPrecioInvalido.length > 0) {
+      errores.push("Hay productos con precio fuera del rango permitido.");
+    }
+
+    if (resumenVenta.abonoAnterior < 0 || resumenVenta.pagoHoy < 0) {
+      errores.push("Los pagos y abonos no pueden ser negativos.");
+    }
+
+    if (resumenVenta.abonoAnterior > resumenVenta.deudaAnterior) {
+      errores.push("El abono de deuda anterior no puede superar la deuda actual.");
+    }
+
+    if (resumenVenta.pagoHoy > resumenVenta.totalProductos) {
+      errores.push("El pago de productos de hoy no puede superar el total vendido hoy.");
+    }
+
+    return errores;
+  }, [productosCantidadInvalida.length, productosPrecioInvalido.length, resumenVenta]);
 
   const gastosRutaActual = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
@@ -364,25 +487,52 @@ function CarteristaContent() {
     setSaving(true);
 
     try {
-      const ordenVisita =
-        Math.max(...clientesRuta.map((cliente) => Number(cliente.ordenVisita) || 0), 0) +
-        1;
+      const selected = clientesRutaBase.find(
+        (cliente) => cliente.id === form.insertarDespuesDe
+      );
+      const ordenManual = Number(form.ordenVisita) || 0;
+      let ordenVisita = clientesRutaBase.length + 1;
 
-      await addDoc(collection(db, "clientes"), {
+      if (ordenManual) {
+        ordenVisita = Math.min(Math.max(ordenManual, 1), clientesRutaBase.length + 1);
+      } else if (selected) {
+        ordenVisita = Number(selected.ordenVisita || 0) + 1;
+      }
+
+      const deudaActual = Number(form.deudaActual) || 0;
+      const diasDeuda = deudaActual > 0 ? Number(form.diasDeuda) || 1 : 0;
+      const batch = writeBatch(db);
+
+      clientesRutaBase
+        .filter((cliente) => Number(cliente.ordenVisita || 0) >= ordenVisita)
+        .forEach((cliente) => {
+          batch.update(doc(db, "clientes", cliente.id), {
+            ordenVisita: Number(cliente.ordenVisita || 0) + 1,
+            updatedAt: serverTimestamp(),
+          });
+        });
+
+      const clienteRef = doc(collection(db, "clientes"));
+
+      batch.set(clienteRef, {
         ...form,
         diaRuta: assignedDay,
         ruta: assignedRoute,
         ordenVisita,
-        deudaActual: 0,
-        diasDeuda: 0,
-        semaforoDeuda: "verde",
+        insertarDespuesDe: "",
+        deudaActual,
+        diasDeuda,
+        semaforoDeuda: getDebtColor(diasDeuda),
         creadoPorCarterista: true,
+        pendienteRevisionOrden: Boolean(form.ordenVisita || form.insertarDespuesDe),
         carteristaId: profile?.uid || "",
         carteristaNombre: profile?.nombre || "",
         solicitudBorrado: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+
+      await batch.commit();
 
       setForm(emptyForm);
       await cargarDatos();
@@ -406,7 +556,133 @@ function CarteristaContent() {
     await cargarDatos();
   }
 
+  async function marcarVisita(cliente, estadoVisita) {
+    const fecha = new Date().toISOString().slice(0, 10);
+    const riesgoPerdida = estadoVisita === "riesgo_perdida";
+    const clienteAtendido = estadoVisita === "visitado";
+    const clienteEnRiesgoAntes =
+      cliente.estadoCliente === "riesgo_perdida" ||
+      cliente.estadoCliente === "perdido" ||
+      Boolean(cliente.riesgoPerdida) ||
+      Boolean(cliente.perdido);
+    const nextEstadoCliente = riesgoPerdida
+      ? "riesgo_perdida"
+      : clienteAtendido
+        ? "activo"
+        : cliente.estadoCliente || "activo";
+    const nextRiesgoPerdida = riesgoPerdida
+      ? true
+      : clienteAtendido
+        ? false
+        : Boolean(cliente.riesgoPerdida);
+    const nextPerdido = clienteAtendido || riesgoPerdida ? false : Boolean(cliente.perdido);
+    const batch = writeBatch(db);
+
+    batch.update(doc(db, "clientes", cliente.id), {
+      estadoVisita,
+      estadoVisitaFecha: fecha,
+      estadoCliente: nextEstadoCliente,
+      riesgoPerdida: nextRiesgoPerdida,
+      perdido: nextPerdido,
+      riesgoPerdidaFecha: riesgoPerdida ? serverTimestamp() : cliente.riesgoPerdidaFecha || null,
+      recuperadoFecha: clienteAtendido && clienteEnRiesgoAntes ? serverTimestamp() : cliente.recuperadoFecha || null,
+      ultimaGestionRuta: serverTimestamp(),
+      ultimoCarteristaGestion: profile?.nombre || "",
+      updatedAt: serverTimestamp(),
+    });
+
+    batch.set(doc(collection(db, "gestionesRuta")), {
+      clienteId: cliente.id,
+      clienteNombre: cliente.nombre || "",
+      telefono: cliente.telefono || "",
+      diaRuta: assignedDay,
+      ruta: assignedRoute,
+      fecha,
+      estadoAnterior: cliente.estadoVisita || "pendiente",
+      estadoVisita,
+      estadoClienteAnterior: cliente.estadoCliente || "activo",
+      estadoCliente: nextEstadoCliente,
+      carteristaId: profile?.uid || "",
+      carteristaNombre: profile?.nombre || "",
+      deudaActual: Number(cliente.deudaActual) || 0,
+      createdAt: serverTimestamp(),
+    });
+
+    if (riesgoPerdida || (clienteAtendido && clienteEnRiesgoAntes)) {
+      batch.set(doc(collection(db, "movimientosCartera")), {
+        clienteId: cliente.id,
+        clienteNombre: cliente.nombre || "",
+        telefono: cliente.telefono || "",
+        diaRuta: assignedDay,
+        ruta: assignedRoute,
+        carteristaId: profile?.uid || "",
+        carteristaNombre: profile?.nombre || "",
+        deudaAnterior: Number(cliente.deudaActual) || 0,
+        nuevaDeuda: Number(cliente.deudaActual) || 0,
+        diasDeuda: Number(cliente.diasDeuda) || 0,
+        tipo: riesgoPerdida ? "riesgo_perdida_ruta" : "cliente_recuperado_ruta",
+        nota: riesgoPerdida
+          ? "Carterista marco riesgo de perder la plata"
+          : "Carterista encontro y atendio cliente en riesgo",
+        estadoCliente: nextEstadoCliente,
+        createdAt: serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
+
+    setClientes((current) =>
+      current.map((item) =>
+        item.id === cliente.id
+          ? {
+              ...item,
+              estadoVisita,
+              estadoVisitaFecha: fecha,
+              estadoVisitaHoy: getRouteVisitState(
+                {
+                  ...item,
+                  estadoVisita,
+                  estadoVisitaFecha: fecha,
+                  estadoCliente: nextEstadoCliente,
+                  riesgoPerdida: nextRiesgoPerdida,
+                  perdido: nextPerdido,
+                },
+                fecha
+              ),
+              estadoCliente: nextEstadoCliente,
+              riesgoPerdida: nextRiesgoPerdida,
+              perdido: nextPerdido,
+              ultimoCarteristaGestion: profile?.nombre || "",
+            }
+          : item
+      )
+    );
+    setSelectedCliente((current) =>
+      current?.id === cliente.id
+        ? {
+            ...current,
+            estadoVisita,
+            estadoVisitaFecha: fecha,
+            estadoCliente: nextEstadoCliente,
+            riesgoPerdida: nextRiesgoPerdida,
+            perdido: nextPerdido,
+            ultimoCarteristaGestion: profile?.nombre || "",
+          }
+        : current
+    );
+  }
+
   function agregarProducto(producto, precioTipo = "sugerido") {
+    if (!selectedCliente) {
+      alert("Selecciona primero el cliente al que le vas a vender.");
+      return;
+    }
+
+    if (!canWorkToday) {
+      alert("Hoy no hay ruta activa. Pide autorizacion al administrador.");
+      return;
+    }
+
     const prices = getProductPrices(producto);
     const precio = prices[precioTipo] || prices.sugerido;
 
@@ -441,7 +717,17 @@ function CarteristaContent() {
   function updateSaleItem(productoId, field, value) {
     setSaleItems((current) =>
       current.map((item) =>
-        item.productoId === productoId ? { ...item, [field]: value } : item
+        item.productoId === productoId
+          ? {
+              ...item,
+              [field]:
+                field === "cantidad"
+                  ? Math.max(Number(value) || 0, 0)
+                  : field === "precio"
+                    ? Number(value) || 0
+                    : value,
+            }
+          : item
       )
     );
   }
@@ -463,6 +749,25 @@ function CarteristaContent() {
     }
     if (!saleItems.length && resumenVenta.abonoAnterior <= 0) {
       alert("Agrega productos o registra un abono.");
+      return;
+    }
+    if (!canWorkToday) {
+      alert("Hoy no hay ruta activa. Pide autorizacion al administrador.");
+      return;
+    }
+    if (bloqueosVenta.length > 0) {
+      alert(`Corrige antes de guardar:\n${bloqueosVenta.join("\n")}`);
+      return;
+    }
+    if (productosPrecioInvalido.length > 0) {
+      const nombres = productosPrecioInvalido
+        .map(
+          (item) =>
+            `${item.nombre}: permitido entre ${money(item.minimo)} y ${money(item.maximo)}`
+        )
+        .join("\n");
+
+      alert(`Hay precios fuera del rango permitido:\n${nombres}`);
       return;
     }
 
@@ -501,13 +806,75 @@ function CarteristaContent() {
       const facturaRef = await addDoc(collection(db, "facturasRuta"), facturaPayload);
 
       const diasDeuda = resumenVenta.deudaFinal > 0 ? 1 : 0;
+      if (
+        resumenVenta.abonoAnterior > 0 ||
+        resumenVenta.fiadoHoy > 0 ||
+        pago.observaciones.trim()
+      ) {
+        await addDoc(collection(db, "movimientosCartera"), {
+          clienteId: selectedCliente.id,
+          clienteNombre: selectedCliente.nombre || "",
+          telefono: selectedCliente.telefono || "",
+          diaRuta: assignedDay,
+          ruta: assignedRoute,
+          facturaRutaId: facturaRef.id,
+          carteristaId: profile?.uid || "",
+          carteristaNombre: profile?.nombre || "",
+          abono: resumenVenta.abonoAnterior,
+          ventaDia: resumenVenta.totalProductos,
+          pagoProductosHoy: resumenVenta.pagoHoy,
+          fiadoHoy: resumenVenta.fiadoHoy,
+          deudaAnterior: resumenVenta.deudaAnterior,
+          nuevaDeuda: resumenVenta.deudaFinal,
+          diasDeuda,
+          nota: pago.observaciones.trim(),
+          tipo: resumenVenta.abonoAnterior > 0 ? "abono_ruta" : "visita_ruta",
+          createdAt: serverTimestamp(),
+        });
+      }
+
       await updateDoc(doc(db, "clientes", selectedCliente.id), {
         deudaActual: resumenVenta.deudaFinal,
         diasDeuda,
         semaforoDeuda: getDebtColor(diasDeuda),
+        estadoVisita: "visitado",
+        estadoVisitaFecha: facturaPayload.fecha,
+        estadoCliente: "activo",
+        riesgoPerdida: false,
+        perdido: false,
+        ultimaNotaCartera: pago.observaciones.trim(),
+        ultimoAbono: resumenVenta.abonoAnterior,
+        ultimoMovimientoCartera: serverTimestamp(),
         ultimaVisita: serverTimestamp(),
+        ultimaGestionRuta: serverTimestamp(),
+        ultimoCarteristaGestion: profile?.nombre || "",
         updatedAt: serverTimestamp(),
       });
+
+      if (
+        selectedCliente.estadoCliente === "riesgo_perdida" ||
+        selectedCliente.estadoCliente === "perdido" ||
+        selectedCliente.riesgoPerdida ||
+        selectedCliente.perdido
+      ) {
+        await addDoc(collection(db, "movimientosCartera"), {
+          clienteId: selectedCliente.id,
+          clienteNombre: selectedCliente.nombre || "",
+          telefono: selectedCliente.telefono || "",
+          diaRuta: assignedDay,
+          ruta: assignedRoute,
+          facturaRutaId: facturaRef.id,
+          carteristaId: profile?.uid || "",
+          carteristaNombre: profile?.nombre || "",
+          deudaAnterior: resumenVenta.deudaAnterior,
+          nuevaDeuda: resumenVenta.deudaFinal,
+          diasDeuda,
+          tipo: "cliente_recuperado_ruta",
+          nota: "Cliente en riesgo/perdido fue atendido y facturado en ruta",
+          estadoCliente: "activo",
+          createdAt: serverTimestamp(),
+        });
+      }
 
       const facturaGuardada = { id: facturaRef.id, ...facturaPayload };
       setUltimaFactura(facturaGuardada);
@@ -516,6 +883,11 @@ function CarteristaContent() {
         deudaActual: resumenVenta.deudaFinal,
         diasDeuda,
         semaforoDeuda: getDebtColor(diasDeuda),
+        estadoVisita: "visitado",
+        estadoVisitaFecha: facturaPayload.fecha,
+        estadoCliente: "activo",
+        riesgoPerdida: false,
+        perdido: false,
       }));
       setSaleItems([]);
       setPago(emptyPago);
@@ -637,6 +1009,38 @@ function CarteristaContent() {
             value={form.local}
             onChange={(e) => updateField("local", e.target.value)}
           />
+          <input
+            min="0"
+            placeholder="Deuda inicial"
+            type="number"
+            value={form.deudaActual}
+            onChange={(e) => updateField("deudaActual", e.target.value)}
+          />
+          <input
+            min="0"
+            placeholder="Dias de deuda"
+            type="number"
+            value={form.diasDeuda}
+            onChange={(e) => updateField("diasDeuda", e.target.value)}
+          />
+          <input
+            min="1"
+            placeholder="Orden de visita"
+            type="number"
+            value={form.ordenVisita}
+            onChange={(e) => updateField("ordenVisita", e.target.value)}
+          />
+          <select
+            value={form.insertarDespuesDe}
+            onChange={(e) => updateField("insertarDespuesDe", e.target.value)}
+          >
+            <option value="">Agregar al final</option>
+            {clientesRutaBase.map((cliente) => (
+              <option key={cliente.id} value={cliente.id}>
+                Debajo de #{cliente.ordenVisita || "-"} {cliente.nombre}
+              </option>
+            ))}
+          </select>
           <button disabled={saving || !canWorkToday} type="submit">
             <Plus size={18} />
             {saving ? "Guardando..." : "Agregar cliente"}
@@ -647,8 +1051,21 @@ function CarteristaContent() {
           <div className="route-toolbar">
             <div>
               <h2>Clientes de la ruta</h2>
-              <p>{clientesRuta.length} clientes para visitar</p>
+              <p>
+                {clientesRuta.length} visibles de {resumenRuta.total} clientes
+              </p>
             </div>
+            <select
+              className="route-status-filter"
+              value={estadoFilter}
+              onChange={(e) => setEstadoFilter(e.target.value)}
+            >
+              <option value="todos">Todos</option>
+              <option value="pendiente">Pendientes</option>
+              <option value="visitado">Visitados</option>
+              <option value="no_encontrado">No disponibles</option>
+              <option value="riesgo_perdida">Riesgo</option>
+            </select>
             <label>
               <Search size={17} />
               <input
@@ -659,15 +1076,48 @@ function CarteristaContent() {
             </label>
           </div>
 
+          <div className="route-status-strip">
+            <button
+              className={estadoFilter === "pendiente" ? "active" : ""}
+              onClick={() => setEstadoFilter("pendiente")}
+              type="button"
+            >
+              Pendientes <strong>{resumenRuta.pendiente}</strong>
+            </button>
+            <button
+              className={estadoFilter === "visitado" ? "active" : ""}
+              onClick={() => setEstadoFilter("visitado")}
+              type="button"
+            >
+              Visitados <strong>{resumenRuta.visitado}</strong>
+            </button>
+            <button
+              className={estadoFilter === "no_encontrado" ? "active" : ""}
+              onClick={() => setEstadoFilter("no_encontrado")}
+              type="button"
+            >
+              No disponibles <strong>{resumenRuta.no_encontrado}</strong>
+            </button>
+            <button
+              className={estadoFilter === "riesgo_perdida" ? "active" : ""}
+              onClick={() => setEstadoFilter("riesgo_perdida")}
+              type="button"
+            >
+              Riesgo <strong>{resumenRuta.riesgo_perdida}</strong>
+            </button>
+          </div>
+
           {loading ? (
             <p>Cargando clientes...</p>
+          ) : clientesRuta.length === 0 ? (
+            <p>No hay clientes con ese filtro.</p>
           ) : (
             <div className="route-client-list">
               {clientesRuta.map((cliente) => (
                 <article
                   className={`route-client-card ${
                     selectedCliente?.id === cliente.id ? "active" : ""
-                  }`}
+                  } route-status-${cliente.estadoVisitaHoy || "pendiente"}`}
                   key={cliente.id}
                 >
                   <button
@@ -680,9 +1130,45 @@ function CarteristaContent() {
                   </button>
                   <span>{cliente.telefono || "Sin telefono"}</span>
                   <span>Debe: {money(cliente.deudaActual || 0)}</span>
-                  <button onClick={() => solicitarBorrado(cliente)} type="button">
+                  <span className="route-visit-status">
+                    {visitStateLabels[cliente.estadoVisitaHoy] || "Pendiente"}
+                  </span>
+                  <div className="route-client-actions">
+                    <button
+                      className="route-action-ok"
+                      aria-label="Cliente encontrado y atendido"
+                      onClick={() => marcarVisita(cliente, "visitado")}
+                      title="Encontrado y atendido"
+                      type="button"
+                    >
+                      <CheckCircle2 size={16} />
+                    </button>
+                    <button
+                      className="route-action-muted"
+                      aria-label="Cliente no disponible temporalmente"
+                      onClick={() => marcarVisita(cliente, "no_encontrado")}
+                      title="No esta: casa, descanso, vacaciones"
+                      type="button"
+                    >
+                      <UserX size={16} />
+                    </button>
+                    <button
+                      className="route-action-risk"
+                      aria-label="Cliente en riesgo de perder cartera"
+                      onClick={() => marcarVisita(cliente, "riesgo_perdida")}
+                      title="Riesgo de perder la plata"
+                      type="button"
+                    >
+                      <CircleX size={16} />
+                    </button>
+                  </div>
+                  <button
+                    aria-label="Solicitar revision para borrar cliente"
+                    onClick={() => solicitarBorrado(cliente)}
+                    title="Solicitar revision para borrar"
+                    type="button"
+                  >
                     <Trash2 size={16} />
-                    Solicitar borrado
                   </button>
                 </article>
               ))}
@@ -788,6 +1274,25 @@ function CarteristaContent() {
             )}
           </div>
 
+          {selectedCliente ? (
+            <div className="selected-client-banner">
+              <div>
+                <span>Cliente seleccionado</span>
+                <strong>
+                  #{selectedCliente.ordenVisita || "-"} {selectedCliente.nombre}
+                </strong>
+                <small>
+                  {selectedCliente.direccion || "Sin direccion"} · Debe{" "}
+                  {money(selectedCliente.deudaActual || 0)}
+                </small>
+              </div>
+            </div>
+          ) : (
+            <div className="selected-client-banner empty">
+              Selecciona un cliente antes de agregar productos.
+            </div>
+          )}
+
           <div className="sale-grid">
             <div className="sale-products">
               <label className="sale-search">
@@ -837,9 +1342,24 @@ function CarteristaContent() {
             <div className="sale-ticket">
               <h3>Productos dejados</h3>
               {saleItems.map((item) => (
-                <div className="sale-ticket-row" key={item.productoId}>
+                <div
+                  className={`sale-ticket-row ${
+                    productosPrecioInvalido.some(
+                      (invalidItem) => invalidItem.productoId === item.productoId
+                    ) ||
+                    productosCantidadInvalida.some(
+                      (invalidItem) => invalidItem.productoId === item.productoId
+                    )
+                      ? "invalid-price"
+                      : ""
+                  }`}
+                  key={item.productoId}
+                >
                   <div>
                     <strong>{item.nombre}</strong>
+                    <small>
+                      Rango permitido: {money(item.minimo)} - {money(item.maximo)}
+                    </small>
                     <div className="price-dots compact">
                       {["minimo", "sugerido", "maximo"].map((tipo) => (
                         <button
@@ -881,6 +1401,24 @@ function CarteristaContent() {
                 </div>
               ))}
 
+              {productosPrecioInvalido.length > 0 && (
+                <div className="route-card route-alert">
+                  Hay productos con precio fuera del rango permitido. Corrige el
+                  precio antes de guardar la factura.
+                </div>
+              )}
+
+              {bloqueosVenta.length > 0 && (
+                <div className="route-card route-alert">
+                  <strong>Revisa la venta antes de guardar</strong>
+                  <ul className="route-alert-list">
+                    {bloqueosVenta.map((mensaje) => (
+                      <li key={mensaje}>{mensaje}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="sale-payment-grid">
                 <label>
                   Abono deuda anterior
@@ -921,7 +1459,7 @@ function CarteristaContent() {
 
               <button
                 className="admin-button"
-                disabled={saving || !selectedCliente}
+                disabled={saving || !selectedCliente || bloqueosVenta.length > 0}
                 onClick={guardarFactura}
                 type="button"
               >

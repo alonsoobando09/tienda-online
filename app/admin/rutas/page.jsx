@@ -7,11 +7,14 @@ import AdminShell from "@/app/admin/components/AdminShell";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { getDiaLabel, money, sortClientesByRoute } from "@/lib/operacion";
-import { MapPinned, Users } from "lucide-react";
+import { AlertTriangle, MapPinned, Users } from "lucide-react";
 
 export default function RutasAdminPage() {
   const [clientes, setClientes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dayFilter, setDayFilter] = useState("todos");
+  const [routeFilter, setRouteFilter] = useState("todas");
+  const [alertFilter, setAlertFilter] = useState("todas");
 
   async function cargarRutas(showLoading = true) {
     if (showLoading) setLoading(true);
@@ -39,14 +42,26 @@ export default function RutasAdminPage() {
         diaRuta: cliente.diaRuta || "sin-dia",
         ruta: cliente.ruta || "Sin ruta",
         clientes: 0,
+        clientesConDeuda: 0,
+        clientesNuevosRuta: 0,
         deuda: 0,
         solicitudesBorrado: 0,
+        ordenPendiente: 0,
+        riesgo: 0,
+        perdidos: 0,
         maxOrden: 0,
       };
 
       current.clientes += 1;
-      current.deuda += Number(cliente.deudaActual) || 0;
+      const deuda = Number(cliente.deudaActual) || 0;
+      current.deuda += deuda;
+      if (deuda > 0) current.clientesConDeuda += 1;
+      if (cliente.creadoPorCarterista) current.clientesNuevosRuta += 1;
       current.solicitudesBorrado += cliente.solicitudBorrado ? 1 : 0;
+      current.ordenPendiente += cliente.pendienteRevisionOrden ? 1 : 0;
+      current.riesgo +=
+        cliente.estadoCliente === "riesgo_perdida" || cliente.riesgoPerdida ? 1 : 0;
+      current.perdidos += cliente.estadoCliente === "perdido" || cliente.perdido ? 1 : 0;
       current.maxOrden = Math.max(
         current.maxOrden,
         Number(cliente.ordenVisita) || 0
@@ -55,12 +70,62 @@ export default function RutasAdminPage() {
       map.set(key, current);
     });
 
-    return [...map.values()].sort((a, b) => {
+    return [...map.values()]
+      .map((ruta) => ({
+        ...ruta,
+        totalAlertas:
+          ruta.solicitudesBorrado +
+          ruta.ordenPendiente +
+          ruta.riesgo +
+          ruta.perdidos,
+        deudaPromedio: ruta.clientesConDeuda
+          ? ruta.deuda / ruta.clientesConDeuda
+          : 0,
+      }))
+      .sort((a, b) => {
       const day = String(a.diaRuta).localeCompare(String(b.diaRuta));
       if (day !== 0) return day;
       return String(a.ruta).localeCompare(String(b.ruta));
     });
   }, [clientes]);
+
+  const diasDisponibles = useMemo(
+    () => [...new Set(rutas.map((ruta) => ruta.diaRuta))].sort(),
+    [rutas]
+  );
+
+  const rutasDisponibles = useMemo(
+    () => [...new Set(rutas.map((ruta) => ruta.ruta))].sort(),
+    [rutas]
+  );
+
+  const rutasFiltradas = useMemo(
+    () =>
+      rutas.filter((ruta) => {
+        if (dayFilter !== "todos" && ruta.diaRuta !== dayFilter) return false;
+        if (routeFilter !== "todas" && ruta.ruta !== routeFilter) return false;
+        if (alertFilter === "con_alertas" && ruta.totalAlertas <= 0) return false;
+        if (alertFilter === "sin_alertas" && ruta.totalAlertas > 0) return false;
+        return true;
+      }),
+    [alertFilter, dayFilter, routeFilter, rutas]
+  );
+
+  const resumenFiltrado = useMemo(
+    () =>
+      rutasFiltradas.reduce(
+        (acc, ruta) => {
+          acc.clientes += ruta.clientes;
+          acc.clientesConDeuda += ruta.clientesConDeuda;
+          acc.deuda += ruta.deuda;
+          acc.alertas += ruta.totalAlertas;
+          acc.nuevos += ruta.clientesNuevosRuta;
+          return acc;
+        },
+        { clientes: 0, clientesConDeuda: 0, deuda: 0, alertas: 0, nuevos: 0 }
+      ),
+    [rutasFiltradas]
+  );
 
   return (
     <AdminGuard>
@@ -81,18 +146,18 @@ export default function RutasAdminPage() {
           </article>
           <article className="admin-card admin-stat-blue">
             <h3>Clientes</h3>
-            <h2>{clientes.length}</h2>
-            <p>Clientes organizados por recorrido.</p>
+            <h2>{resumenFiltrado.clientes}</h2>
+            <p>{resumenFiltrado.clientesConDeuda} con deuda.</p>
           </article>
           <article className="admin-card admin-stat-gold">
             <h3>Cartera</h3>
-            <h2>{money(clientes.reduce((acc, c) => acc + (Number(c.deudaActual) || 0), 0))}</h2>
-            <p>Total registrado en clientes.</p>
+            <h2>{money(resumenFiltrado.deuda)}</h2>
+            <p>Total de rutas visibles.</p>
           </article>
           <article className="admin-card admin-stat-red">
-            <h3>Por revisar</h3>
-            <h2>{clientes.filter((cliente) => cliente.solicitudBorrado).length}</h2>
-            <p>Clientes marcados para posible borrado.</p>
+            <h3>Alertas ruta</h3>
+            <h2>{resumenFiltrado.alertas}</h2>
+            <p>{resumenFiltrado.nuevos} clientes creados en ruta.</p>
           </article>
         </section>
 
@@ -100,12 +165,47 @@ export default function RutasAdminPage() {
           <div className="admin-page-header">
             <div>
               <h2>Planillas de ruta</h2>
-              <p>Resumen operativo para despacho, visita y cartera.</p>
+              <p>{rutasFiltradas.length} planillas visibles para despacho, visita y cartera.</p>
             </div>
-            <Link className="admin-button" href="/admin/clientes">
-              <Users size={18} />
-              Gestionar clientes
-            </Link>
+            <div className="admin-actions">
+              <select
+                className="admin-select-inline"
+                value={dayFilter}
+                onChange={(event) => setDayFilter(event.target.value)}
+              >
+                <option value="todos">Todos los dias</option>
+                {diasDisponibles.map((dia) => (
+                  <option key={dia} value={dia}>
+                    {getDiaLabel(dia)}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="admin-select-inline"
+                value={routeFilter}
+                onChange={(event) => setRouteFilter(event.target.value)}
+              >
+                <option value="todas">Todas las rutas</option>
+                {rutasDisponibles.map((ruta) => (
+                  <option key={ruta} value={ruta}>
+                    {ruta}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="admin-select-inline"
+                value={alertFilter}
+                onChange={(event) => setAlertFilter(event.target.value)}
+              >
+                <option value="todas">Todas</option>
+                <option value="con_alertas">Con alertas</option>
+                <option value="sin_alertas">Sin alertas</option>
+              </select>
+              <Link className="admin-button" href="/admin/clientes">
+                <Users size={18} />
+                Gestionar clientes
+              </Link>
+            </div>
           </div>
 
           {loading ? (
@@ -119,11 +219,13 @@ export default function RutasAdminPage() {
                   <th>Clientes</th>
                   <th>Ultimo orden</th>
                   <th>Cartera</th>
+                  <th>Riesgo</th>
+                  <th>Perdidos</th>
                   <th>Revision</th>
                 </tr>
               </thead>
               <tbody>
-                {rutas.map((ruta) => (
+                {rutasFiltradas.map((ruta) => (
                   <tr key={ruta.key}>
                     <td>
                       <strong>{ruta.ruta}</strong>
@@ -135,20 +237,42 @@ export default function RutasAdminPage() {
                     <td>{getDiaLabel(ruta.diaRuta)}</td>
                     <td>{ruta.clientes}</td>
                     <td>#{ruta.maxOrden || "-"}</td>
-                    <td>{money(ruta.deuda)}</td>
+                    <td>
+                      {money(ruta.deuda)}
+                      <small>
+                        {ruta.clientesConDeuda} clientes / prom.{" "}
+                        {money(ruta.deudaPromedio)}
+                      </small>
+                    </td>
+                    <td>{ruta.riesgo}</td>
+                    <td>{ruta.perdidos}</td>
                     <td>
                       <span
                         className={`debt-pill ${
-                          ruta.solicitudesBorrado ? "amarillo" : "verde"
+                          ruta.totalAlertas > 0
+                            ? "amarillo"
+                            : "verde"
                         }`}
                       >
-                        {ruta.solicitudesBorrado
-                          ? `${ruta.solicitudesBorrado} por revisar`
+                        {ruta.totalAlertas > 0
+                          ? `${ruta.totalAlertas} alertas`
                           : "Sin pendientes"}
                       </span>
+                      {ruta.totalAlertas > 0 && (
+                        <small>
+                          <AlertTriangle size={13} /> {ruta.solicitudesBorrado} borrar /{" "}
+                          {ruta.ordenPendiente} orden / {ruta.riesgo} riesgo /{" "}
+                          {ruta.perdidos} perdidos
+                        </small>
+                      )}
                     </td>
                   </tr>
                 ))}
+                {!rutasFiltradas.length && (
+                  <tr>
+                    <td colSpan="8">No hay rutas con esos filtros.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           )}

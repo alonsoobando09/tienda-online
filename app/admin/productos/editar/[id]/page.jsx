@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
@@ -8,6 +8,11 @@ import { categories } from "@/lib/categories";
 import { storage } from "@/lib/firebase";
 import { getSafeImageSrc } from "@/lib/images";
 import { uploadImageWithFallback } from "@/lib/clientImages";
+import {
+  getProductValidationErrors,
+  normalizeProductUnit,
+  productUnits,
+} from "@/lib/productValidation";
 
 const imageSlots = [
   { field: "imagen", label: "Imagen principal" },
@@ -37,6 +42,7 @@ export default function EditarProductoPage() {
         if (active) {
           setProducto({
             ...data,
+            unidad: normalizeProductUnit(data.unidad),
             imagenes: Array.isArray(data.imagenes)
               ? [...data.imagenes, "", "", ""].slice(0, 3)
               : ["", "", ""],
@@ -65,6 +71,11 @@ export default function EditarProductoPage() {
       return { ...current, imagenes };
     });
   }
+
+  const productWarnings = useMemo(
+    () => (producto ? getProductValidationErrors(producto) : []),
+    [producto]
+  );
 
   async function subirImagen(e, slot = "imagen") {
     const file = e.target.files?.[0];
@@ -97,6 +108,11 @@ export default function EditarProductoPage() {
 
     if (uploading) {
       alert("Espera a que termine de subir la imagen antes de guardar.");
+      return;
+    }
+
+    if (productWarnings.length > 0) {
+      alert(productWarnings.join("\n"));
       return;
     }
 
@@ -170,6 +186,20 @@ export default function EditarProductoPage() {
                   value={producto.proveedor || ""}
                   onChange={(e) => updateField("proveedor", e.target.value)}
                 />
+              </label>
+
+              <label>
+                Unidad
+                <select
+                  value={normalizeProductUnit(producto.unidad)}
+                  onChange={(e) => updateField("unidad", e.target.value)}
+                >
+                  {productUnits.map((unit) => (
+                    <option key={unit} value={unit}>
+                      {unit}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <label>
@@ -291,6 +321,17 @@ export default function EditarProductoPage() {
                 <p className="admin-help" style={{ gridColumn: "1 / -1" }}>
                   {uploadMessage}
                 </p>
+              )}
+
+              {productWarnings.length > 0 && (
+                <div className="route-alert" style={{ gridColumn: "1 / -1" }}>
+                  <strong>Revisa antes de guardar</strong>
+                  <ul className="route-alert-list">
+                    {productWarnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
               )}
 
               <label>

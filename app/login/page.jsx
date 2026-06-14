@@ -43,7 +43,9 @@ export default function LoginPage() {
         localStorage.removeItem("userRole");
         localStorage.removeItem("userEmail");
         setErrorMessage(
-          "Tu usuario existe, pero todavia no tiene un rol asignado por el administrador."
+          profile.role
+            ? "Tu usuario esta inactivo o bloqueado. Pide al administrador que reactive el empleado."
+            : "Tu usuario existe, pero todavia no tiene un rol asignado por el administrador."
         );
         return;
       }

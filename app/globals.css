@@ -458,6 +458,15 @@ button:hover {
   border-left: 5px solid #b42318;
 }
 
+.route-alert-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.route-alert-list li {
+  margin: 4px 0;
+}
+
 .route-info {
   margin-top: 16px;
   border-left: 5px solid #2563eb;
@@ -527,6 +536,53 @@ button:hover {
   width: 180px;
 }
 
+.route-status-filter {
+  min-height: 40px;
+  border: 1px solid #dce6e0;
+  border-radius: 8px;
+  background: #f8fbf8;
+  padding: 0 10px;
+  color: #12231d;
+  font-weight: 800;
+}
+
+.route-status-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.route-status-strip button {
+  min-height: 42px;
+  border: 1px solid #dce6e0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #394841;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.route-status-strip button strong {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #e9efe9;
+  color: #12231d;
+}
+
+.route-status-strip button.active {
+  border-color: #d6b160;
+  background: #fff8e6;
+  color: #12231d;
+}
+
 .route-client-list {
   display: grid;
   gap: 10px;
@@ -534,7 +590,7 @@ button:hover {
 
 .route-client-card {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 140px 140px auto;
+  grid-template-columns: 1.2fr .8fr 120px 120px minmax(180px, auto) auto;
   align-items: center;
   gap: 10px;
   padding: 12px;
@@ -558,6 +614,66 @@ button:hover {
   background: #fffaf0;
 }
 
+.route-client-card.route-status-visitado {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.route-client-card.route-status-no_encontrado {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.route-client-card.route-status-riesgo_perdida {
+  border-color: #9ca3af;
+  background: #f3f4f6;
+  box-shadow: inset 5px 0 0 #6b7280;
+}
+
+.route-visit-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #e9efe9;
+  color: #394841;
+  font-size: 12px !important;
+  font-weight: 900;
+}
+
+.route-client-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.route-client-actions button,
+.route-client-card > button:not(.route-client-main) {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.route-client-actions .route-action-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.route-client-actions .route-action-muted {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.route-client-actions .route-action-risk {
+  background: #e5e7eb;
+  color: #374151;
+}
+
 .route-client-main {
   display: grid;
   gap: 3px;
@@ -571,6 +687,45 @@ button:hover {
 
 .sale-workspace {
   margin-top: 16px;
+}
+
+.selected-client-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid #d6b160;
+  border-radius: 8px;
+  background: #fff8e8;
+  color: #12231d;
+  box-shadow: inset 5px 0 0 #d6b160;
+}
+
+.selected-client-banner div {
+  display: grid;
+  gap: 3px;
+}
+
+.selected-client-banner span,
+.selected-client-banner small {
+  color: #66756f;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.selected-client-banner strong {
+  font-size: clamp(20px, 4vw, 30px);
+  line-height: 1.1;
+}
+
+.selected-client-banner.empty {
+  border-color: #cbd8d0;
+  background: #f8fbf8;
+  box-shadow: inset 5px 0 0 #cbd8d0;
+  color: #52615a;
+  font-weight: 900;
 }
 
 .route-expenses {
@@ -730,6 +885,20 @@ button:hover {
   border: 1px solid #edf1ef;
   border-radius: 8px;
   padding: 10px;
+}
+
+.sale-ticket-row.invalid-price {
+  border-color: #b42318;
+  background: #fff1f2;
+  box-shadow: inset 4px 0 0 #b42318;
+}
+
+.sale-ticket-row small {
+  display: block;
+  margin-top: 4px;
+  color: #66756f;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .sale-ticket-row > button {
@@ -959,6 +1128,86 @@ button:hover {
   background: #fff1f2;
 }
 
+.audit-panel {
+  border-top: 4px solid #12231d;
+}
+
+.audit-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.audit-status.cuadrado {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.audit-status.con_alertas {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.audit-status.bloqueado {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.audit-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.audit-grid div {
+  display: grid;
+  gap: 5px;
+  min-height: 92px;
+  padding: 12px;
+  border: 1px solid #dce6e0;
+  border-radius: 8px;
+  background: #f8fbf8;
+}
+
+.audit-grid span,
+.audit-grid small {
+  color: #52615a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.audit-grid strong {
+  color: #12231d;
+  font-size: clamp(18px, 2vw, 24px);
+}
+
+.audit-alerts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.audit-alerts span {
+  border: 1px solid #fca5a5;
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: #fff1f2;
+  color: #991b1b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.audit-diff-table {
+  margin-top: 14px;
+}
+
 .liquidation-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1046,6 +1295,24 @@ button:hover {
   line-height: 1.15;
 }
 
+.report-ranking-line {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #edf1ef;
+}
+
+.report-ranking-line span {
+  color: #394841;
+  font-weight: 800;
+}
+
+.report-ranking-line small {
+  color: #66756f;
+}
+
 .map-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(280px, .6fr);
@@ -1054,6 +1321,53 @@ button:hover {
 
 .map-panel {
   min-height: 440px;
+}
+
+.map-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.map-status-card {
+  border: 1px solid #d7e4dc;
+  border-radius: 8px;
+  background: #f8fbf8;
+  color: #12231d;
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-status-card span {
+  display: block;
+  color: #66756f;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.map-status-card strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 22px;
+}
+
+.map-status-card.active {
+  border-color: #123f2a;
+  box-shadow: 0 0 0 2px rgba(18, 63, 42, .12);
+}
+
+.map-status-card.success strong {
+  color: #067647;
+}
+
+.map-status-card.warning strong {
+  color: #a15c07;
+}
+
+.map-status-card.danger strong {
+  color: #b42318;
 }
 
 .map-canvas {
@@ -1087,10 +1401,97 @@ button:hover {
   box-shadow: 0 10px 24px rgba(180, 35, 24, .22);
 }
 
+.map-marker.activo {
+  background: #067647;
+  box-shadow: 0 10px 24px rgba(6, 118, 71, .24);
+}
+
+.map-marker.reciente {
+  background: #b7791f;
+  box-shadow: 0 10px 24px rgba(183, 121, 31, .24);
+}
+
+.map-marker.atrasado,
+.map-marker.sin_reporte {
+  background: #66756f;
+  box-shadow: 0 10px 24px rgba(18, 35, 29, .2);
+}
+
 .map-marker span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.map-empty-state {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #66756f;
+  font-weight: 900;
+  text-align: center;
+}
+
+.map-legend {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  color: #34423d;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.map-legend span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-legend i {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: #66756f;
+}
+
+.map-legend i.success {
+  background: #067647;
+}
+
+.map-legend i.warning {
+  background: #b7791f;
+}
+
+.map-legend i.danger {
+  background: #66756f;
+}
+
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #edf4f0;
+  color: #34423d;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.admin-badge.success {
+  background: #dcfce7;
+  color: #067647;
+}
+
+.admin-badge.warning {
+  background: #fef3c7;
+  color: #a15c07;
+}
+
+.admin-badge.danger {
+  background: #fee2e2;
+  color: #b42318;
 }
 
 .access-screen {
@@ -1272,6 +1673,27 @@ button:hover {
   color: #66756f;
 }
 
+.admin-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.admin-toolbar p {
+  margin: 4px 0 0;
+  color: #66756f;
+}
+
+.admin-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .admin-card h2,
 .admin-card h3 {
   margin-top: 0;
@@ -1297,6 +1719,10 @@ button:hover {
   background: #edf3ef;
   color: #33443d;
   font-size: 13px;
+}
+
+.admin-table tr.table-row-warning td {
+  background: #fff7ed;
 }
 
 .admin-form {
@@ -1352,12 +1778,42 @@ button:hover {
   background: transparent;
 }
 
+.admin-input-inline {
+  min-width: min(100%, 220px);
+  border: 1px solid #ced8d3;
+  border-radius: 8px;
+  padding: 10px;
+  font: inherit;
+  background: #fbfdfb;
+}
+
 .admin-select-inline {
   border: 1px solid #ced8d3;
   border-radius: 8px;
   padding: 10px;
   font: inherit;
   background: #fbfdfb;
+}
+
+.admin-search-inline {
+  min-width: min(100%, 280px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #ced8d3;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #fbfdfb;
+  color: #52615a;
+}
+
+.admin-search-inline input {
+  width: 100%;
+  min-height: 40px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
 }
 
 .payable-actions {
@@ -1374,6 +1830,57 @@ button:hover {
   padding: 9px;
   font: inherit;
   background: #fbfdfb;
+}
+
+.payable-alert-list {
+  display: grid;
+  gap: 10px;
+}
+
+.payable-alert-list article {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(120px, .7fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #f5d0d0;
+  border-radius: 8px;
+  background: #fff7f7;
+  padding: 12px;
+}
+
+.payable-alert-list small {
+  grid-column: 1 / -1;
+  color: #8a3a2f;
+  font-weight: 800;
+}
+
+.payment-method-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.payment-method-grid div {
+  border: 1px solid #dce6e0;
+  border-radius: 8px;
+  background: #f8fbf8;
+  padding: 12px;
+}
+
+.payment-method-grid span,
+.payment-method-grid strong {
+  display: block;
+}
+
+.payment-method-grid span {
+  color: #66756f;
+  font-weight: 800;
+}
+
+.payment-method-grid strong {
+  margin-top: 4px;
+  color: #12231d;
+  font-size: 20px;
 }
 
 .admin-button {
@@ -1446,6 +1953,135 @@ button:hover {
   color: #fff;
 }
 
+.invoice-actions-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.invoice-actions-card h2 {
+  margin: 8px 0 2px;
+}
+
+.invoice-detail-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.invoice-print-card {
+  border-top: 4px solid #12231d;
+}
+
+.receipt-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.receipt-header h2 {
+  margin: 2px 0;
+}
+
+.receipt-header strong {
+  color: #12231d;
+  font-size: 28px;
+}
+
+.receipt-totals {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 16px;
+  max-width: 420px;
+  margin: 16px 0 0 auto;
+  padding-top: 14px;
+  border-top: 1px solid #e3ebe6;
+}
+
+.receipt-totals span {
+  color: #52615a;
+}
+
+.receipt-thanks {
+  margin: 18px 0 0;
+  color: #12231d;
+  font-weight: 800;
+  text-align: center;
+}
+
+.contable-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-main-grid {
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, .55fr);
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .admin-sidebar,
+  .admin-topbar,
+  .invoice-actions-card,
+  .admin-kpis,
+  .invoice-detail-grid {
+    display: none !important;
+  }
+
+  .admin-main,
+  .admin-content {
+    display: block;
+    padding: 0;
+    margin: 0;
+  }
+
+  .invoice-print-card {
+    box-shadow: none;
+    border: 0;
+  }
+}
+
+.debt-pill.gris {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.cartera-layout {
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr);
+}
+
+.cartera-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cartera-history {
+  display: grid;
+  gap: 10px;
+}
+
+.cartera-history div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid #dce6e0;
+  border-radius: 8px;
+  background: #f8fbf8;
+}
+
+.cartera-history strong {
+  text-transform: capitalize;
+}
+
+.cartera-history span,
+.cartera-history p {
+  margin: 0;
+  color: #52615a;
+  font-size: 13px;
+}
+
 .admin-help {
   color: #66756f;
   font-size: 13px;
@@ -1488,6 +2124,73 @@ button:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.admin-icon-button {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #dce6e0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #123f2a;
+  cursor: pointer;
+}
+
+.admin-icon-button:hover {
+  border-color: #123f2a;
+  background: #eef8f1;
+}
+
+.admin-icon-button.muted {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.admin-icon-button.danger {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #b42318;
+}
+
+.recovery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.recovery-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #dce6e0;
+  border-radius: 8px;
+  background: #f8fbf8;
+  padding: 14px;
+}
+
+.recovery-card strong,
+.recovery-card small,
+.recovery-client-list span {
+  display: block;
+}
+
+.recovery-card small,
+.recovery-client-list {
+  color: #66756f;
+}
+
+.recovery-card-total {
+  color: #111827;
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.recovery-client-list {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .product-detail {
@@ -1829,12 +2532,24 @@ button:hover {
     width: 100%;
   }
 
+  .route-status-filter {
+    width: 100%;
+  }
+
   .route-toolbar input {
     width: 100%;
   }
 
+  .route-status-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .route-client-card {
     grid-template-columns: 1fr;
+  }
+
+  .route-client-actions {
+    display: flex;
   }
 
   .dispatch-grid {
@@ -1858,7 +2573,46 @@ button:hover {
     grid-template-columns: 1fr;
   }
 
+  .admin-toolbar,
+  .invoice-actions-card,
+  .receipt-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-toolbar-actions {
+    justify-content: flex-start;
+  }
+
+  .admin-input-inline,
+  .admin-select-inline,
+  .admin-toolbar-actions .admin-button {
+    width: 100%;
+  }
+
+  .invoice-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .receipt-totals {
+    max-width: none;
+    margin-left: 0;
+  }
+
+  .audit-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .payable-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .payable-alert-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .cartera-layout,
+  .cartera-form {
     grid-template-columns: 1fr;
   }
 
@@ -1879,12 +2633,24 @@ button:hover {
     grid-template-columns: 1fr;
   }
 
+  .contable-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-main-grid {
+    grid-template-columns: 1fr;
+  }
+
   .weekly-close-grid {
     grid-template-columns: 1fr;
   }
 
   .map-grid {
     grid-template-columns: 1fr;
+  }
+
+  .map-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .route-hero-actions {

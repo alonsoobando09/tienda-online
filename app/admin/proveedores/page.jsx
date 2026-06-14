@@ -40,6 +40,8 @@ function normalize(value) {
 export default function ProveedoresAdminPage() {
   const [proveedores, setProveedores] = useState([]);
   const [productos, setProductos] = useState([]);
+  const [compras, setCompras] = useState([]);
+  const [cuentasPagar, setCuentasPagar] = useState([]);
   const [selectedProveedorId, setSelectedProveedorId] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState("");
@@ -51,9 +53,11 @@ export default function ProveedoresAdminPage() {
     setLoading(true);
 
     try {
-      const [proveedoresSnap, productosSnap] = await Promise.all([
+      const [proveedoresSnap, productosSnap, comprasSnap, cuentasPagarSnap] = await Promise.all([
         getDocs(collection(db, "proveedores")),
         getDocs(collection(db, "productos")),
+        getDocs(collection(db, "compras")),
+        getDocs(collection(db, "cuentasPagar")),
       ]);
       setProveedores(
         proveedoresSnap.docs
@@ -64,6 +68,10 @@ export default function ProveedoresAdminPage() {
         productosSnap.docs
           .map((docu) => ({ id: docu.id, ...docu.data() }))
           .sort((a, b) => String(a.nombre || "").localeCompare(String(b.nombre || "")))
+      );
+      setCompras(comprasSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })));
+      setCuentasPagar(
+        cuentasPagarSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() }))
       );
     } finally {
       setLoading(false);
@@ -125,6 +133,65 @@ export default function ProveedoresAdminPage() {
 
     return grouped;
   }, [productos, proveedores]);
+
+  const resumenPorProveedor = useMemo(() => {
+    const grouped = new Map();
+    const today = new Date().toISOString().slice(0, 10);
+
+    proveedores.forEach((proveedor) => {
+      grouped.set(proveedor.id, {
+        compras: 0,
+        totalComprado: 0,
+        alertasFactura: 0,
+        saldoPendiente: 0,
+        cuentasVencidas: 0,
+        ultimaCompra: "",
+      });
+    });
+
+    compras.forEach((compra) => {
+      const current = grouped.get(compra.proveedorId);
+      if (!current) return;
+
+      current.compras += 1;
+      current.totalComprado += Number(compra.totalCompra) || 0;
+      if (compra.alertaFactura || compra.estadoRevisionFactura === "diferencia_fuerte") {
+        current.alertasFactura += 1;
+      }
+      if (String(compra.fecha || "") > String(current.ultimaCompra || "")) {
+        current.ultimaCompra = compra.fecha || "";
+      }
+    });
+
+    cuentasPagar.forEach((cuenta) => {
+      const current = grouped.get(cuenta.proveedorId);
+      if (!current) return;
+
+      current.saldoPendiente += Number(cuenta.saldoPendiente) || 0;
+      if (
+        cuenta.estado !== "pagada" &&
+        cuenta.fechaVencimiento &&
+        cuenta.fechaVencimiento < today
+      ) {
+        current.cuentasVencidas += 1;
+      }
+    });
+
+    return grouped;
+  }, [compras, cuentasPagar, proveedores]);
+
+  const resumenFinanciero = useMemo(() => {
+    return [...resumenPorProveedor.values()].reduce(
+      (acc, item) => {
+        acc.totalComprado += item.totalComprado;
+        acc.saldoPendiente += item.saldoPendiente;
+        acc.alertasFactura += item.alertasFactura;
+        acc.cuentasVencidas += item.cuentasVencidas;
+        return acc;
+      },
+      { totalComprado: 0, saldoPendiente: 0, alertasFactura: 0, cuentasVencidas: 0 }
+    );
+  }, [resumenPorProveedor]);
 
   const proveedorSeleccionado = useMemo(
     () => proveedores.find((proveedor) => proveedor.id === selectedProveedorId),
@@ -231,6 +298,29 @@ export default function ProveedoresAdminPage() {
             <h3>Cupo credito</h3>
             <h2>{money(resumen.cupo)}</h2>
             <p>Cupo registrado.</p>
+          </article>
+        </section>
+
+        <section className="admin-grid admin-kpis" style={{ marginTop: 16 }}>
+          <article className="admin-card">
+            <h3>Comprado historico</h3>
+            <h2>{money(resumenFinanciero.totalComprado)}</h2>
+            <p>Compras registradas.</p>
+          </article>
+          <article className="admin-card admin-stat-red">
+            <h3>Saldo por pagar</h3>
+            <h2>{money(resumenFinanciero.saldoPendiente)}</h2>
+            <p>Credito pendiente.</p>
+          </article>
+          <article className="admin-card admin-stat-gold">
+            <h3>Facturas alerta</h3>
+            <h2>{resumenFinanciero.alertasFactura}</h2>
+            <p>Diferencias por revisar.</p>
+          </article>
+          <article className="admin-card admin-stat-blue">
+            <h3>Cuentas vencidas</h3>
+            <h2>{resumenFinanciero.cuentasVencidas}</h2>
+            <p>Pagos fuera de fecha.</p>
           </article>
         </section>
 
@@ -386,6 +476,9 @@ export default function ProveedoresAdminPage() {
                 <th>Telefono</th>
                 <th>Metodo</th>
                 <th>Productos</th>
+                <th>Comprado</th>
+                <th>Saldo</th>
+                <th>Alertas</th>
                 <th>Cupo</th>
                 <th>Estado</th>
                 <th></th>
@@ -394,55 +487,75 @@ export default function ProveedoresAdminPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="8">Cargando proveedores...</td>
+                  <td colSpan="11">Cargando proveedores...</td>
                 </tr>
               ) : (
-                proveedoresFiltrados.map((proveedor) => (
-                  <tr key={proveedor.id}>
-                    <td>
-                      <strong>{proveedor.nombre}</strong>
-                      <br />
-                      <small>{proveedor.categorias || "Sin categorias"}</small>
-                    </td>
-                    <td>{proveedor.contacto || "Sin contacto"}</td>
-                    <td>{proveedor.telefono || "Sin telefono"}</td>
-                    <td>{proveedor.metodoPago || "contado"}</td>
-                    <td>{productosPorProveedor.get(proveedor.id)?.length || 0}</td>
-                    <td>{money(proveedor.cupoCredito || 0)}</td>
-                    <td>
-                      <span className="admin-pill">{proveedor.estado || "activo"}</span>
-                    </td>
-                    <td>
-                      <div className="admin-actions">
-                        <button
-                          className="admin-button secondary"
-                          onClick={() => setSelectedProveedorId(proveedor.id)}
-                          type="button"
-                        >
-                          Productos
-                        </button>
-                        <button
-                          className="admin-button secondary"
-                          onClick={() => editarProveedor(proveedor)}
-                          type="button"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          className="admin-button danger"
-                          onClick={() => eliminarProveedor(proveedor)}
-                          type="button"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                proveedoresFiltrados.map((proveedor) => {
+                  const proveedorResumen = resumenPorProveedor.get(proveedor.id) || {};
+                  const alertas =
+                    (proveedorResumen.alertasFactura || 0) +
+                    (proveedorResumen.cuentasVencidas || 0);
+
+                  return (
+                    <tr key={proveedor.id}>
+                      <td>
+                        <strong>{proveedor.nombre}</strong>
+                        <br />
+                        <small>{proveedor.categorias || "Sin categorias"}</small>
+                        {proveedorResumen.ultimaCompra && (
+                          <>
+                            <br />
+                            <small>Ultima compra {proveedorResumen.ultimaCompra}</small>
+                          </>
+                        )}
+                      </td>
+                      <td>{proveedor.contacto || "Sin contacto"}</td>
+                      <td>{proveedor.telefono || "Sin telefono"}</td>
+                      <td>{proveedor.metodoPago || "contado"}</td>
+                      <td>{productosPorProveedor.get(proveedor.id)?.length || 0}</td>
+                      <td>{money(proveedorResumen.totalComprado || 0)}</td>
+                      <td>{money(proveedorResumen.saldoPendiente || 0)}</td>
+                      <td>
+                        <span className={`debt-pill ${alertas ? "rojo" : "verde"}`}>
+                          {alertas}
+                        </span>
+                      </td>
+                      <td>{money(proveedor.cupoCredito || 0)}</td>
+                      <td>
+                        <span className="admin-pill">{proveedor.estado || "activo"}</span>
+                      </td>
+                      <td>
+                        <div className="admin-actions">
+                          <button
+                            className="admin-button secondary"
+                            onClick={() => setSelectedProveedorId(proveedor.id)}
+                            type="button"
+                          >
+                            Productos
+                          </button>
+                          <button
+                            className="admin-button secondary"
+                            onClick={() => editarProveedor(proveedor)}
+                            type="button"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            className="admin-button danger"
+                            onClick={() => eliminarProveedor(proveedor)}
+                            type="button"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
               {!loading && proveedoresFiltrados.length === 0 && (
                 <tr>
-                  <td colSpan="8">No hay proveedores para mostrar.</td>
+                  <td colSpan="11">No hay proveedores para mostrar.</td>
                 </tr>
               )}
             </tbody>

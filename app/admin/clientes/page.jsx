@@ -20,7 +20,19 @@ import {
   rutasBase,
   sortClientesByRoute,
 } from "@/lib/operacion";
-import { FileUp, Save, Trash2, UserPlus } from "lucide-react";
+import {
+  ArchiveX,
+  CheckCheck,
+  Edit3,
+  FileUp,
+  MessageCircle,
+  RotateCcw,
+  Save,
+  ShieldAlert,
+  Trash2,
+  UserPlus,
+  XCircle,
+} from "lucide-react";
 
 const emptyForm = {
   nombre: "",
@@ -72,6 +84,24 @@ function normalizePhone(value) {
   return text ? text.replace(/^57/, "") : "";
 }
 
+function buildWhatsappUrl(cliente) {
+  const phone = normalizePhone(cliente.telefono);
+  if (!phone) return "";
+
+  const lines = [
+    "Proveedor Central",
+    `Hola ${cliente.nombre || ""}.`,
+    `Te recordamos que tienes un saldo pendiente de ${money(cliente.deudaActual || 0)}.`,
+    `Ruta: ${getDiaLabel(cliente.diaRuta)} - ${cliente.ruta || "Sin ruta"}.`,
+    "",
+    "Por favor nos confirmas tu abono o pago. Muchas gracias.",
+  ];
+
+  return `https://wa.me/57${phone.slice(-10)}?text=${encodeURIComponent(
+    lines.join("\n")
+  )}`;
+}
+
 function getClientKey(cliente) {
   const phone = normalizePhone(cliente.telefono || cliente.phone);
   if (phone) return `phone:${phone}`;
@@ -116,6 +146,7 @@ export default function ClientesAdminPage() {
   const [clientes, setClientes] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [filter, setFilter] = useState("");
+  const [reviewFilter, setReviewFilter] = useState("todos");
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -151,21 +182,113 @@ export default function ClientesAdminPage() {
 
   const clientesFiltrados = useMemo(() => {
     const term = filter.trim().toLowerCase();
-    if (!term) return clientes;
 
-    return clientes.filter((cliente) =>
-      [
-        cliente.nombre,
-        cliente.telefono,
-        cliente.direccion,
-        cliente.local,
-        cliente.ruta,
-        cliente.diaRuta,
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(term))
-    );
-  }, [clientes, filter]);
+    return clientes
+      .filter((cliente) => {
+        if (reviewFilter === "borrado") return cliente.solicitudBorrado;
+        if (reviewFilter === "orden") return cliente.pendienteRevisionOrden;
+        if (reviewFilter === "creados") return cliente.creadoPorCarterista;
+        if (reviewFilter === "perdidos") return cliente.estadoCliente === "perdido";
+        if (reviewFilter === "riesgo") {
+          return cliente.estadoCliente === "riesgo_perdida" || cliente.riesgoPerdida;
+        }
+        return true;
+      })
+      .filter((cliente) => {
+        if (!term) return true;
+        return [
+          cliente.nombre,
+          cliente.telefono,
+          cliente.direccion,
+          cliente.local,
+          cliente.ruta,
+          cliente.diaRuta,
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(term));
+      });
+  }, [clientes, filter, reviewFilter]);
+
+  const resumenRevision = useMemo(
+    () => ({
+      borrar: clientes.filter((cliente) => cliente.solicitudBorrado).length,
+      orden: clientes.filter((cliente) => cliente.pendienteRevisionOrden).length,
+      creados: clientes.filter((cliente) => cliente.creadoPorCarterista).length,
+      perdidos: clientes.filter((cliente) => cliente.estadoCliente === "perdido").length,
+      riesgo: clientes.filter(
+        (cliente) => cliente.estadoCliente === "riesgo_perdida" || cliente.riesgoPerdida
+      ).length,
+    }),
+    [clientes]
+  );
+
+  const carteraPorRecuperar = useMemo(() => {
+    const map = new Map();
+
+    clientes
+      .filter(
+        (cliente) =>
+          cliente.estadoCliente === "perdido" ||
+          cliente.perdido ||
+          cliente.estadoCliente === "riesgo_perdida" ||
+          cliente.riesgoPerdida
+      )
+      .forEach((cliente) => {
+        const key = `${cliente.diaRuta || "sin-dia"}__${cliente.ruta || "Sin ruta"}`;
+        const current = map.get(key) || {
+          key,
+          diaRuta: cliente.diaRuta || "sin-dia",
+          ruta: cliente.ruta || "Sin ruta",
+          riesgo: 0,
+          perdidos: 0,
+          carteraRiesgo: 0,
+          carteraPerdida: 0,
+          clientes: [],
+        };
+        const deuda = Number(cliente.deudaActual) || 0;
+        const perdido = cliente.estadoCliente === "perdido" || cliente.perdido;
+
+        if (perdido) {
+          current.perdidos += 1;
+          current.carteraPerdida += deuda;
+        } else {
+          current.riesgo += 1;
+          current.carteraRiesgo += deuda;
+        }
+
+        current.clientes.push(cliente);
+        map.set(key, current);
+      });
+
+    return [...map.values()].sort((a, b) => {
+      const totalB = b.carteraRiesgo + b.carteraPerdida;
+      const totalA = a.carteraRiesgo + a.carteraPerdida;
+      return totalB - totalA;
+    });
+  }, [clientes]);
+
+  const clientesPorRecuperar = useMemo(
+    () =>
+      clientes
+        .filter(
+          (cliente) =>
+            cliente.estadoCliente === "perdido" ||
+            cliente.perdido ||
+            cliente.estadoCliente === "riesgo_perdida" ||
+            cliente.riesgoPerdida
+        )
+        .sort((a, b) => {
+          const deudaDiff =
+            Number(b.deudaActual || 0) - Number(a.deudaActual || 0);
+          if (deudaDiff !== 0) return deudaDiff;
+          const diaDiff = String(a.diaRuta || "").localeCompare(
+            String(b.diaRuta || "")
+          );
+          if (diaDiff !== 0) return diaDiff;
+          return Number(a.ordenVisita || 0) - Number(b.ordenVisita || 0);
+        }),
+    [clientes]
+  );
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -309,6 +432,76 @@ export default function ClientesAdminPage() {
     if (!confirm("Eliminar este cliente definitivamente?")) return;
     await deleteDoc(doc(db, "clientes", id));
     await cargarClientes();
+  }
+
+  async function aprobarOrdenCliente(cliente) {
+    const batch = writeBatch(db);
+    batch.update(doc(db, "clientes", cliente.id), {
+      pendienteRevisionOrden: false,
+      revisionOrdenAprobada: true,
+      revisionOrdenFecha: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    await batch.commit();
+    await cargarClientes(false);
+  }
+
+  async function quitarSolicitudBorrado(cliente) {
+    const batch = writeBatch(db);
+    batch.update(doc(db, "clientes", cliente.id), {
+      solicitudBorrado: false,
+      solicitudBorradoRevisada: true,
+      solicitudBorradoRevisadaFecha: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    await batch.commit();
+    await cargarClientes(false);
+  }
+
+  async function cambiarEstadoCliente(cliente, estadoCliente) {
+    const batch = writeBatch(db);
+    const riesgoPerdida = estadoCliente === "riesgo_perdida";
+    const perdido = estadoCliente === "perdido";
+    const recuperado = estadoCliente === "activo";
+    const estadoLabel = perdido
+      ? "Cliente pasado a archivo perdido"
+      : riesgoPerdida
+        ? "Cliente marcado en riesgo de perdida"
+        : "Cliente recuperado";
+
+    batch.update(doc(db, "clientes", cliente.id), {
+      estadoCliente,
+      perdido,
+      riesgoPerdida,
+      fechaEstadoCliente: serverTimestamp(),
+      fechaPerdido: perdido ? serverTimestamp() : cliente.fechaPerdido || null,
+      fechaRiesgoPerdida: riesgoPerdida
+        ? serverTimestamp()
+        : cliente.fechaRiesgoPerdida || null,
+      fechaRecuperado: recuperado ? serverTimestamp() : cliente.fechaRecuperado || null,
+      solicitudBorrado: recuperado ? false : Boolean(cliente.solicitudBorrado),
+      updatedAt: serverTimestamp(),
+    });
+
+    batch.set(doc(collection(db, "movimientosCartera")), {
+      clienteId: cliente.id,
+      clienteNombre: cliente.nombre || "",
+      telefono: cliente.telefono || "",
+      diaRuta: cliente.diaRuta || "",
+      ruta: cliente.ruta || "",
+      deudaAnterior: Number(cliente.deudaActual) || 0,
+      nuevaDeuda: Number(cliente.deudaActual) || 0,
+      diasDeuda: Number(cliente.diasDeuda) || 0,
+      tipo: recuperado ? "cliente_recuperado" : perdido ? "cliente_perdido" : "riesgo_perdida",
+      nota: estadoLabel,
+      estadoCliente,
+      createdAt: serverTimestamp(),
+    });
+
+    await batch.commit();
+    await cargarClientes(false);
   }
 
   async function loadXlsxLibrary() {
@@ -633,17 +826,189 @@ export default function ClientesAdminPage() {
         </section>
 
         <section className="admin-card" style={{ marginTop: 16 }}>
+          <div className="admin-section-title">
+            <div>
+              <h2>Archivo de cartera por recuperar</h2>
+              <p>
+                Clientes en gris o perdidos organizados por dia y ruta para
+                perseguir cobros delicados.
+              </p>
+            </div>
+            <ShieldAlert size={26} />
+          </div>
+
+          {carteraPorRecuperar.length === 0 ? (
+            <p className="admin-help">No hay clientes en riesgo o perdidos.</p>
+          ) : (
+            <div className="recovery-grid">
+              {carteraPorRecuperar.slice(0, 8).map((grupo) => (
+                <article className="recovery-card" key={grupo.key}>
+                  <div>
+                    <strong>
+                      {getDiaLabel(grupo.diaRuta)} - {grupo.ruta}
+                    </strong>
+                    <small>
+                      {grupo.riesgo} en riesgo · {grupo.perdidos} perdidos
+                    </small>
+                  </div>
+                  <div className="recovery-card-total">
+                    {money(grupo.carteraRiesgo + grupo.carteraPerdida)}
+                  </div>
+                  <div className="recovery-client-list">
+                    {grupo.clientes
+                      .sort(
+                        (a, b) =>
+                          Number(a.ordenVisita || 0) - Number(b.ordenVisita || 0)
+                      )
+                      .slice(0, 5)
+                      .map((cliente) => (
+                        <span key={cliente.id}>
+                          #{cliente.ordenVisita || "-"} {cliente.nombre} ·{" "}
+                          {money(cliente.deudaActual || 0)}
+                        </span>
+                      ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="admin-card" style={{ marginTop: 16 }}>
+          <div className="admin-section-title">
+            <div>
+              <h2>Acciones rápidas de recuperación</h2>
+              <p>
+                Clientes delicados ordenados por deuda para contactar, editar o
+                recuperar sin buscarlos en toda la base.
+              </p>
+            </div>
+          </div>
+
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Ruta</th>
+                <th>Deuda</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clientesPorRecuperar.slice(0, 15).map((cliente) => {
+                const whatsappUrl = buildWhatsappUrl(cliente);
+                const perdido =
+                  cliente.estadoCliente === "perdido" || cliente.perdido;
+
+                return (
+                  <tr key={cliente.id}>
+                    <td>
+                      <strong>{cliente.nombre}</strong>
+                      <br />
+                      <small>{cliente.telefono || "Sin telefono"}</small>
+                    </td>
+                    <td>
+                      {getDiaLabel(cliente.diaRuta)}
+                      <br />
+                      <small>
+                        {cliente.ruta || "Sin ruta"} #{cliente.ordenVisita || "-"}
+                      </small>
+                    </td>
+                    <td>
+                      {money(cliente.deudaActual || 0)}
+                      <br />
+                      <small>{cliente.diasDeuda || 0} dias</small>
+                    </td>
+                    <td>
+                      <span className={`debt-pill ${perdido ? "negro" : "gris"}`}>
+                        {perdido ? "Perdido" : "Riesgo"}
+                      </span>
+                    </td>
+                    <td className="admin-row-actions">
+                      {whatsappUrl && (
+                        <a
+                          aria-label="Enviar cobro por WhatsApp"
+                          className="admin-icon-button"
+                          href={whatsappUrl}
+                          rel="noreferrer"
+                          target="_blank"
+                          title="WhatsApp"
+                        >
+                          <MessageCircle size={16} />
+                        </a>
+                      )}
+                      <button
+                        aria-label="Editar cliente"
+                        className="admin-icon-button"
+                        onClick={() => editarCliente(cliente)}
+                        title="Editar"
+                        type="button"
+                      >
+                        <Edit3 size={16} />
+                      </button>
+                      <button
+                        aria-label="Marcar cliente recuperado"
+                        className="admin-icon-button"
+                        onClick={() => cambiarEstadoCliente(cliente, "activo")}
+                        title="Recuperado"
+                        type="button"
+                      >
+                        <RotateCcw size={16} />
+                      </button>
+                      {!perdido && (
+                        <button
+                          aria-label="Pasar cliente a perdido"
+                          className="admin-icon-button danger"
+                          onClick={() => cambiarEstadoCliente(cliente, "perdido")}
+                          title="Pasar a perdido"
+                          type="button"
+                        >
+                          <ArchiveX size={16} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!loading && clientesPorRecuperar.length === 0 && (
+                <tr>
+                  <td colSpan="5">No hay clientes delicados por recuperar.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </section>
+
+        <section className="admin-card" style={{ marginTop: 16 }}>
           <div className="admin-page-header">
             <div>
               <h2>Clientes registrados</h2>
-              <p>{clientes.length} clientes en base operativa</p>
+              <p>
+                {clientes.length} clientes en base operativa · {resumenRevision.borrar} para
+                borrar · {resumenRevision.orden} orden pendiente · {resumenRevision.riesgo} riesgo · {resumenRevision.perdidos} perdidos
+              </p>
             </div>
-            <input
-              placeholder="Buscar cliente, telefono, ruta o direccion"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              style={{ maxWidth: 380 }}
-            />
+            <div className="admin-actions">
+              <select
+                className="admin-select-inline"
+                value={reviewFilter}
+                onChange={(e) => setReviewFilter(e.target.value)}
+              >
+                <option value="todos">Todos</option>
+                <option value="borrado">Solicitan borrar</option>
+                <option value="orden">Orden por revisar</option>
+                <option value="creados">Creados en ruta</option>
+                <option value="riesgo">Riesgo de perdida</option>
+                <option value="perdidos">Clientes perdidos</option>
+              </select>
+              <input
+                placeholder="Buscar cliente, telefono, ruta o direccion"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                style={{ maxWidth: 380 }}
+              />
+            </div>
           </div>
 
           {loading ? (
@@ -690,20 +1055,120 @@ export default function ClientesAdminPage() {
                       )}
                     </td>
                     <td>
-                      <span className={`debt-pill ${cliente.semaforoDeuda || "verde"}`}>
-                        {cliente.solicitudBorrado ? "Revisar borrado" : cliente.semaforoDeuda || "verde"}
+                      <span
+                        className={`debt-pill ${
+                          cliente.estadoCliente === "perdido"
+                            ? "negro"
+                            : cliente.estadoCliente === "riesgo_perdida" || cliente.riesgoPerdida
+                              ? "gris"
+                            : cliente.solicitudBorrado
+                            ? "rojo"
+                            : cliente.pendienteRevisionOrden
+                              ? "amarillo"
+                              : cliente.semaforoDeuda || "verde"
+                        }`}
+                      >
+                        {cliente.estadoCliente === "perdido"
+                          ? "Perdido"
+                          : cliente.estadoCliente === "riesgo_perdida" || cliente.riesgoPerdida
+                            ? "Riesgo perdida"
+                          : cliente.solicitudBorrado
+                          ? "Revisar borrado"
+                          : cliente.pendienteRevisionOrden
+                            ? "Revisar orden"
+                            : cliente.semaforoDeuda || "verde"}
                       </span>
+                      {cliente.estadoCliente === "perdido" && (
+                        <>
+                          <br />
+                          <small>Archivo clientes perdidos</small>
+                        </>
+                      )}
+                      {(cliente.estadoCliente === "riesgo_perdida" || cliente.riesgoPerdida) && (
+                        <>
+                          <br />
+                          <small>Riesgo de perder cartera</small>
+                        </>
+                      )}
+                      {cliente.creadoPorCarterista && (
+                        <>
+                          <br />
+                          <small>Creado en ruta</small>
+                        </>
+                      )}
                     </td>
                     <td className="admin-row-actions">
                       <button
-                        className="admin-button secondary"
+                        aria-label="Editar cliente"
+                        className="admin-icon-button"
                         onClick={() => editarCliente(cliente)}
+                        title="Editar"
                       >
-                        Editar
+                        <Edit3 size={16} />
                       </button>
+                      {cliente.pendienteRevisionOrden && (
+                        <button
+                          aria-label="Aprobar orden de visita"
+                          className="admin-icon-button"
+                          onClick={() => aprobarOrdenCliente(cliente)}
+                          title="Aprobar orden"
+                        >
+                          <CheckCheck size={16} />
+                        </button>
+                      )}
+                      {cliente.solicitudBorrado && (
+                        <button
+                          aria-label="Quitar solicitud de borrado"
+                          className="admin-icon-button"
+                          onClick={() => quitarSolicitudBorrado(cliente)}
+                          title="No borrar"
+                        >
+                          <XCircle size={16} />
+                        </button>
+                      )}
+                      {cliente.estadoCliente === "perdido" ? (
+                        <button
+                          aria-label="Marcar cliente recuperado"
+                          className="admin-icon-button"
+                          onClick={() => cambiarEstadoCliente(cliente, "activo")}
+                          title="Recuperado"
+                        >
+                          <RotateCcw size={16} />
+                        </button>
+                      ) : cliente.estadoCliente === "riesgo_perdida" || cliente.riesgoPerdida ? (
+                        <>
+                          <button
+                            aria-label="Marcar cliente recuperado"
+                            className="admin-icon-button"
+                            onClick={() => cambiarEstadoCliente(cliente, "activo")}
+                            title="Recuperado"
+                          >
+                            <RotateCcw size={16} />
+                          </button>
+                          <button
+                            aria-label="Pasar cliente a perdido"
+                            className="admin-icon-button danger"
+                            onClick={() => cambiarEstadoCliente(cliente, "perdido")}
+                            title="Pasar a perdido"
+                          >
+                            <ArchiveX size={16} />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          aria-label="Marcar riesgo de perdida"
+                          className="admin-icon-button muted"
+                          onClick={() => cambiarEstadoCliente(cliente, "riesgo_perdida")}
+                          title="Riesgo de perdida"
+                        >
+                          <ShieldAlert size={16} />
+                        </button>
+                      )}
                       <button
-                        className="admin-button danger"
+                        aria-label="Eliminar cliente definitivamente"
+                        className="admin-icon-button danger"
                         onClick={() => eliminarCliente(cliente.id)}
+                        title="Eliminar definitivamente"
                       >
                         <Trash2 size={16} />
                       </button>
