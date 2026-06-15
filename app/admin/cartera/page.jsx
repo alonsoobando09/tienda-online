@@ -3,15 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import {
-  addDoc,
   collection,
-  doc,
   getDocs,
-  serverTimestamp,
-  updateDoc,
+  query,
+  where,
 } from "firebase/firestore";
+import { getCurrentEmpresaId } from "@/lib/tenant";
 import { getDebtColor, getDiaLabel, money, sortClientesByRoute } from "@/lib/operacion";
 import {
   AlertTriangle,
@@ -63,9 +62,12 @@ export default function CarteraAdminPage() {
     setLoading(true);
 
     try {
+      const empresaId = getCurrentEmpresaId();
       const [clientesSnap, movimientosSnap] = await Promise.all([
-        getDocs(collection(db, "clientes")),
-        getDocs(collection(db, "movimientosCartera")),
+        getDocs(query(collection(db, "clientes"), where("empresaId", "==", empresaId))),
+        getDocs(
+          query(collection(db, "movimientosCartera"), where("empresaId", "==", empresaId))
+        ),
       ]);
 
       setClientes(
@@ -275,30 +277,29 @@ export default function CarteraAdminPage() {
     setSaving(true);
 
     try {
-      await updateDoc(doc(db, "clientes", selectedClient.id), {
-        deudaActual: nuevaDeuda,
-        diasDeuda,
-        semaforoDeuda: getDebtColor(diasDeuda),
-        ultimaNotaCartera: nota,
-        ultimoAbono: abono,
-        ultimoMovimientoCartera: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Sesion no disponible. Ingresa nuevamente.");
 
-      await addDoc(collection(db, "movimientosCartera"), {
-        clienteId: selectedClient.id,
-        clienteNombre: selectedClient.nombre || "",
-        telefono: selectedClient.telefono || "",
-        diaRuta: selectedClient.diaRuta || "",
-        ruta: selectedClient.ruta || "",
-        abono,
-        deudaAnterior,
-        nuevaDeuda,
-        diasDeuda,
-        nota,
-        tipo: abono > 0 ? "abono" : tieneAjusteManual ? "ajuste" : "nota",
-        createdAt: serverTimestamp(),
+      const response = await fetch("/api/admin/cartera", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "movimiento",
+          clienteId: selectedClient.id,
+          abono,
+          ajusteDeuda: form.ajusteDeuda,
+          diasDeuda,
+          nota,
+        }),
       });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo guardar el movimiento.");
+      }
 
       setForm({
         abono: "",
@@ -310,7 +311,7 @@ export default function CarteraAdminPage() {
       setSelectedClientId(selectedClient.id);
     } catch (error) {
       console.error("Error guardando cartera:", error);
-      alert("No se pudo guardar el movimiento de cartera.");
+      alert(error.message || "No se pudo guardar el movimiento de cartera.");
     } finally {
       setSaving(false);
     }
@@ -325,39 +326,33 @@ export default function CarteraAdminPage() {
 
     if (!confirm(`Deseas ${labels[estadoCliente]} a ${cliente.nombre}?`)) return;
 
-    const riesgoPerdida = estadoCliente === "riesgo_perdida";
-    const perdido = estadoCliente === "perdido";
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Sesion no disponible. Ingresa nuevamente.");
 
-    await updateDoc(doc(db, "clientes", cliente.id), {
-      estadoCliente,
-      riesgoPerdida,
-      perdido,
-      riesgoPerdidaFecha: riesgoPerdida ? serverTimestamp() : null,
-      perdidoFecha: perdido ? serverTimestamp() : null,
-      recuperadoFecha: estadoCliente === "activo" ? serverTimestamp() : null,
-      updatedAt: serverTimestamp(),
-    });
+      const response = await fetch("/api/admin/cartera", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "estado",
+          clienteId: cliente.id,
+          estadoCliente,
+        }),
+      });
+      const result = await response.json();
 
-    await addDoc(collection(db, "movimientosCartera"), {
-      clienteId: cliente.id,
-      clienteNombre: cliente.nombre || "",
-      telefono: cliente.telefono || "",
-      diaRuta: cliente.diaRuta || "",
-      ruta: cliente.ruta || "",
-      deudaAnterior: number(cliente.deudaActual),
-      nuevaDeuda: number(cliente.deudaActual),
-      diasDeuda: number(cliente.diasDeuda),
-      nota: labels[estadoCliente],
-      tipo:
-        estadoCliente === "activo"
-          ? "cliente_recuperado"
-          : estadoCliente === "perdido"
-            ? "cliente_perdido"
-            : "riesgo_perdida",
-      createdAt: serverTimestamp(),
-    });
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo cambiar el estado.");
+      }
 
-    await cargarCartera();
+      await cargarCartera();
+    } catch (error) {
+      console.error("Error cambiando estado de cartera:", error);
+      alert(error.message || "No se pudo cambiar el estado de cartera.");
+    }
   }
 
   return (

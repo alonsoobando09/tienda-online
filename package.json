@@ -7,7 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "make-admin": "node scripts/setAdmin.mjs"
+    "make-admin": "node scripts/setAdmin.mjs",
+    "backup": "node scripts/backupFirestore.mjs",
+    "backup:proveedor-central": "node scripts/backupFirestore.mjs --empresa=proveedor-central",
+    "backup:install-task": "powershell -ExecutionPolicy Bypass -File scripts/installBackupTask.ps1",
+    "tenant:migrate": "node scripts/migrateEmpresaId.mjs",
+    "tenant:check": "node scripts/migrateEmpresaId.mjs --dry-run",
+    "project:check": "node scripts/checkProject.mjs",
+    "test:build": "set NEXT_PUBLIC_APP_ENV=test&& next build"
   },
   "dependencies": {
     "firebase": "^12.9.0",

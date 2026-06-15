@@ -3,15 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import {
   collection,
-  deleteDoc,
   doc,
   getDocs,
+  query,
   serverTimestamp,
+  where,
   writeBatch,
 } from "firebase/firestore";
+import { getCurrentEmpresaId } from "@/lib/tenant";
 import {
   diasRuta,
   getDebtColor,
@@ -155,7 +157,9 @@ export default function ClientesAdminPage() {
 
   async function cargarClientes(showLoading = true) {
     if (showLoading) setLoading(true);
-    const snapshot = await getDocs(collection(db, "clientes"));
+    const snapshot = await getDocs(
+      query(collection(db, "clientes"), where("empresaId", "==", getCurrentEmpresaId()))
+    );
     const data = snapshot.docs.map((docu) => ({ id: docu.id, ...docu.data() }));
     setClientes(sortClientesByRoute(data));
     setLoading(false);
@@ -316,59 +320,16 @@ export default function ClientesAdminPage() {
     });
   }
 
-  function getSameRouteClientes(diaRuta, ruta, excludeId = "") {
-    return sortClientesByRoute(
-      clientes.filter(
-        (cliente) =>
-          cliente.id !== excludeId &&
-          cliente.diaRuta === diaRuta &&
-          cliente.ruta === ruta
-      )
-    );
-  }
-
-  async function guardarOrdenCliente(clienteId, payload, desiredOrder) {
-    const sameRoute = getSameRouteClientes(
-      payload.diaRuta,
-      payload.ruta,
-      clienteId
-    );
-    const maxOrder = sameRoute.length + 1;
-    const nextOrder = Math.min(Math.max(Number(desiredOrder) || maxOrder, 1), maxOrder);
-    const ordered = [
-      ...sameRoute.slice(0, nextOrder - 1),
-      { id: clienteId, ...payload },
-      ...sameRoute.slice(nextOrder - 1),
-    ];
-    const batch = writeBatch(db);
-
-    ordered.forEach((cliente, index) => {
-      const ref = doc(db, "clientes", cliente.id);
-      const ordenVisita = index + 1;
-
-      if (cliente.id === clienteId) {
-        batch.update(ref, {
-          ...payload,
-          ordenVisita,
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        batch.update(ref, {
-          ordenVisita,
-          updatedAt: serverTimestamp(),
-        });
-      }
-    });
-
-    await batch.commit();
-  }
-
   async function guardarCliente(e) {
     e.preventDefault();
     setSaving(true);
 
     try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Sesion no disponible. Ingresa nuevamente.");
+
       const payload = {
+        id: editingId,
         nombre: form.nombre.trim(),
         telefono: form.telefono.trim(),
         direccion: form.direccion.trim(),
@@ -377,52 +338,30 @@ export default function ClientesAdminPage() {
         ruta: form.ruta.trim() || "Ruta 1",
         deudaActual: Number(form.deudaActual) || 0,
         diasDeuda: Number(form.diasDeuda) || 0,
-        semaforoDeuda: getDebtColor(form.diasDeuda),
         observaciones: form.observaciones.trim(),
-        solicitudBorrado: false,
-        updatedAt: serverTimestamp(),
+        ordenVisita: form.ordenVisita,
+        insertarDespuesDe: form.insertarDespuesDe,
       };
 
-      if (editingId) {
-        await guardarOrdenCliente(editingId, payload, form.ordenVisita);
-      } else {
-        const sameRoute = clientesMismaRuta;
-        const selected = sameRoute.find(
-          (cliente) => cliente.id === form.insertarDespuesDe
-        );
-        const ordenManual = Number(form.ordenVisita) || 0;
-        let ordenVisita = sameRoute.length + 1;
+      const response = await fetch("/api/admin/clientes", {
+        method: editingId ? "PUT" : "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
 
-        if (ordenManual) {
-          ordenVisita = Math.min(Math.max(ordenManual, 1), sameRoute.length + 1);
-        } else if (selected) {
-          ordenVisita = Number(selected.ordenVisita || 0) + 1;
-        }
-
-        const batch = writeBatch(db);
-        sameRoute
-          .filter((cliente) => Number(cliente.ordenVisita || 0) >= ordenVisita)
-          .forEach((cliente) => {
-            batch.update(doc(db, "clientes", cliente.id), {
-              ordenVisita: Number(cliente.ordenVisita || 0) + 1,
-              updatedAt: serverTimestamp(),
-            });
-          });
-
-        const newRef = doc(collection(db, "clientes"));
-        batch.set(newRef, {
-          ...payload,
-          ordenVisita,
-          createdAt: serverTimestamp(),
-        });
-        await batch.commit();
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo guardar el cliente.");
       }
 
       limpiarFormulario();
       await cargarClientes();
     } catch (error) {
       console.error("Error guardando cliente:", error);
-      alert("No se pudo guardar el cliente.");
+      alert(error.message || "No se pudo guardar el cliente.");
     } finally {
       setSaving(false);
     }
@@ -430,78 +369,78 @@ export default function ClientesAdminPage() {
 
   async function eliminarCliente(id) {
     if (!confirm("Eliminar este cliente definitivamente?")) return;
-    await deleteDoc(doc(db, "clientes", id));
-    await cargarClientes();
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Sesion no disponible. Ingresa nuevamente.");
+
+      const response = await fetch("/api/admin/clientes", {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo eliminar el cliente.");
+      }
+
+      await cargarClientes();
+    } catch (error) {
+      console.error("Error eliminando cliente:", error);
+      alert(error.message || "No se pudo eliminar el cliente.");
+    }
   }
 
   async function aprobarOrdenCliente(cliente) {
-    const batch = writeBatch(db);
-    batch.update(doc(db, "clientes", cliente.id), {
-      pendienteRevisionOrden: false,
-      revisionOrdenAprobada: true,
-      revisionOrdenFecha: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+    await ejecutarAccionCliente({
+      id: cliente.id,
+      action: "aprobar_orden",
     });
-
-    await batch.commit();
-    await cargarClientes(false);
   }
 
   async function quitarSolicitudBorrado(cliente) {
-    const batch = writeBatch(db);
-    batch.update(doc(db, "clientes", cliente.id), {
-      solicitudBorrado: false,
-      solicitudBorradoRevisada: true,
-      solicitudBorradoRevisadaFecha: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+    await ejecutarAccionCliente({
+      id: cliente.id,
+      action: "quitar_solicitud_borrado",
     });
-
-    await batch.commit();
-    await cargarClientes(false);
   }
 
   async function cambiarEstadoCliente(cliente, estadoCliente) {
-    const batch = writeBatch(db);
-    const riesgoPerdida = estadoCliente === "riesgo_perdida";
-    const perdido = estadoCliente === "perdido";
-    const recuperado = estadoCliente === "activo";
-    const estadoLabel = perdido
-      ? "Cliente pasado a archivo perdido"
-      : riesgoPerdida
-        ? "Cliente marcado en riesgo de perdida"
-        : "Cliente recuperado";
-
-    batch.update(doc(db, "clientes", cliente.id), {
+    await ejecutarAccionCliente({
+      id: cliente.id,
+      action: "estado",
       estadoCliente,
-      perdido,
-      riesgoPerdida,
-      fechaEstadoCliente: serverTimestamp(),
-      fechaPerdido: perdido ? serverTimestamp() : cliente.fechaPerdido || null,
-      fechaRiesgoPerdida: riesgoPerdida
-        ? serverTimestamp()
-        : cliente.fechaRiesgoPerdida || null,
-      fechaRecuperado: recuperado ? serverTimestamp() : cliente.fechaRecuperado || null,
-      solicitudBorrado: recuperado ? false : Boolean(cliente.solicitudBorrado),
-      updatedAt: serverTimestamp(),
     });
+  }
 
-    batch.set(doc(collection(db, "movimientosCartera")), {
-      clienteId: cliente.id,
-      clienteNombre: cliente.nombre || "",
-      telefono: cliente.telefono || "",
-      diaRuta: cliente.diaRuta || "",
-      ruta: cliente.ruta || "",
-      deudaAnterior: Number(cliente.deudaActual) || 0,
-      nuevaDeuda: Number(cliente.deudaActual) || 0,
-      diasDeuda: Number(cliente.diasDeuda) || 0,
-      tipo: recuperado ? "cliente_recuperado" : perdido ? "cliente_perdido" : "riesgo_perdida",
-      nota: estadoLabel,
-      estadoCliente,
-      createdAt: serverTimestamp(),
-    });
+  async function ejecutarAccionCliente(payload) {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("Sesion no disponible. Ingresa nuevamente.");
 
-    await batch.commit();
-    await cargarClientes(false);
+      const response = await fetch("/api/admin/clientes", {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo actualizar el cliente.");
+      }
+
+      await cargarClientes(false);
+    } catch (error) {
+      console.error("Error actualizando cliente:", error);
+      alert(error.message || "No se pudo actualizar el cliente.");
+    }
   }
 
   async function loadXlsxLibrary() {
@@ -540,7 +479,10 @@ export default function ClientesAdminPage() {
         return;
       }
 
-      const clientesSnap = await getDocs(collection(db, "clientes"));
+      const empresaId = getCurrentEmpresaId();
+      const clientesSnap = await getDocs(
+        query(collection(db, "clientes"), where("empresaId", "==", empresaId))
+      );
       const existingByKey = new Map();
       const maxOrdenByRoute = new Map();
 
@@ -568,6 +510,7 @@ export default function ClientesAdminPage() {
           if (existingId) {
             batch.update(doc(db, "clientes", existingId), {
               ...cliente,
+              empresaId,
               updatedAt: serverTimestamp(),
             });
             updated += 1;
@@ -582,6 +525,7 @@ export default function ClientesAdminPage() {
           const clienteRef = doc(collection(db, "clientes"));
           batch.set(clienteRef, {
             ...cliente,
+            empresaId,
             ordenVisita: nextOrden,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -608,7 +552,10 @@ export default function ClientesAdminPage() {
   }
 
   async function renumerarRutas() {
-    const snapshot = await getDocs(collection(db, "clientes"));
+    const empresaId = getCurrentEmpresaId();
+    const snapshot = await getDocs(
+      query(collection(db, "clientes"), where("empresaId", "==", empresaId))
+    );
     const grouped = new Map();
 
     snapshot.docs.forEach((docu) => {

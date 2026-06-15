@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { getUserProfile, normalizeRole } from "@/lib/authRoles";
+import { canAccessRole } from "@/lib/permissions";
 
 export default function AdminGuard({ allowedRoles = ["admin"], children }) {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function AdminGuard({ allowedRoles = ["admin"], children }) {
       try {
         const profile = await getUserProfile(user);
 
-        if (!user || !profile.allowed || !allowed.includes(profile.role)) {
+        if (!user || !profile.allowed || !canAccessRole(profile.role, allowed)) {
           localStorage.removeItem("admin");
           router.push(user ? "/" : "/login");
           return;
@@ -33,6 +34,7 @@ export default function AdminGuard({ allowedRoles = ["admin"], children }) {
 
         localStorage.setItem("userRole", profile.role);
         localStorage.setItem("userEmail", user.email || "");
+        localStorage.setItem("empresaId", profile.empresaId || "proveedor-central");
         setAuthorized(true);
       } catch (error) {
         console.error(error);

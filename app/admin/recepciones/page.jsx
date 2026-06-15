@@ -579,9 +579,17 @@ export default function RecepcionesAdminPage() {
         title="Recepcion nocturna"
         subtitle="Recibe devoluciones, revisa productos dejados y detecta descuadres."
         actions={
-          <button className="admin-button" disabled={saving} onClick={guardarRecepcion}>
+          <button
+            className="admin-button"
+            disabled={saving || auditoria.estado === "bloqueado"}
+            onClick={guardarRecepcion}
+          >
             <Save size={18} />
-            {saving ? "Guardando..." : "Guardar recepcion"}
+            {saving
+              ? "Guardando..."
+              : auditoria.estado === "bloqueado"
+                ? "Recepcion bloqueada"
+                : "Guardar recepcion"}
           </button>
         }
       >
@@ -956,13 +964,22 @@ export default function RecepcionesAdminPage() {
                     <td>
                       <input
                         min="0"
+                        max={cantidad}
                         type="number"
                         value={item.devuelto}
                         onChange={(e) =>
                           updateItem(item.productoId, "devuelto", e.target.value)
                         }
-                        style={{ width: 88 }}
+                        style={{
+                          borderColor: devueltoInvalido ? "#b91c1c" : undefined,
+                          width: 88,
+                        }}
                       />
+                      {devueltoInvalido && (
+                        <small style={{ color: "#b91c1c", display: "block" }}>
+                          No puede superar {cantidad}
+                        </small>
+                      )}
                     </td>
                     <td>{dejado}</td>
                     <td>{facturado.cantidad}</td>

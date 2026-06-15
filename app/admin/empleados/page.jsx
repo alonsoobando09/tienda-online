@@ -4,17 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
 import { useEmpleados } from "@/lib/useEmpleados";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import {
-  addDoc,
   collection,
-  deleteDoc,
-  doc,
   getDocs,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
+  query,
+  where,
 } from "firebase/firestore";
+import { getCurrentEmpresaId } from "@/lib/tenant";
 import { diasRuta, getDiaLabel, rutasBase } from "@/lib/operacion";
 import { Save, Search, Trash2, UserPlus } from "lucide-react";
 
@@ -72,9 +69,10 @@ export default function EmpleadosPage() {
   const [saving, setSaving] = useState(false);
 
   async function cargarResumenOperativo() {
+    const empresaId = getCurrentEmpresaId();
     const [liquidacionesSnap, gastosSnap] = await Promise.all([
-      getDocs(collection(db, "liquidaciones")),
-      getDocs(collection(db, "gastosRuta")),
+      getDocs(query(collection(db, "liquidaciones"), where("empresaId", "==", empresaId))),
+      getDocs(query(collection(db, "gastosRuta"), where("empresaId", "==", empresaId))),
     ]);
 
     setLiquidaciones(
@@ -120,58 +118,39 @@ export default function EmpleadosPage() {
   async function guardarEmpleado(event) {
     event.preventDefault();
     setSaving(true);
-    const empleadoAnterior = editingId
-      ? empleados.find((empleado) => empleado.id === editingId)
-      : null;
 
     const payload = {
       ...form,
+      id: editingId,
       uid: form.uid.trim(),
       email: form.email.trim().toLowerCase(),
       pagoDiario: Number(form.pagoDiario) || 0,
-      updatedAt: serverTimestamp(),
     };
 
     try {
-      let empleadoId = editingId;
-
-      if (editingId) {
-        await updateDoc(doc(db, "empleados", editingId), payload);
-        if (empleadoAnterior?.uid && empleadoAnterior.uid !== payload.uid) {
-          await deleteDoc(doc(db, "usuarios", empleadoAnterior.uid));
-        }
-      } else {
-        const empleadoRef = await addDoc(collection(db, "empleados"), {
-          ...payload,
-          createdAt: serverTimestamp(),
-        });
-        empleadoId = empleadoRef.id;
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error("Sesion no disponible. Ingresa nuevamente.");
       }
 
-      if (payload.uid) {
-        await setDoc(
-          doc(db, "usuarios", payload.uid),
-          {
-            uid: payload.uid,
-            empleadoId,
-            nombre: payload.nombre,
-            email: payload.email,
-            rol: payload.rol,
-            cargo: payload.cargo,
-            telefono: payload.telefono,
-            diaRuta: payload.diaRuta,
-            ruta: payload.ruta,
-            estado: payload.estado,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
+      const response = await fetch("/api/admin/empleados", {
+        method: editingId ? "PUT" : "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo guardar el empleado.");
       }
 
       limpiarFormulario();
     } catch (error) {
       console.error("Error guardando empleado:", error);
-      alert("No se pudo guardar el empleado.");
+      alert(error.message || "No se pudo guardar el empleado.");
     } finally {
       setSaving(false);
     }
@@ -180,10 +159,28 @@ export default function EmpleadosPage() {
   async function eliminarEmpleado(empleado) {
     if (!confirm("Eliminar este empleado del panel operativo?")) return;
 
-    await deleteDoc(doc(db, "empleados", empleado.id));
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error("Sesion no disponible. Ingresa nuevamente.");
+      }
 
-    if (empleado.uid) {
-      await deleteDoc(doc(db, "usuarios", empleado.uid));
+      const response = await fetch("/api/admin/empleados", {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id: empleado.id }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo eliminar el empleado.");
+      }
+    } catch (error) {
+      console.error("Error eliminando empleado:", error);
+      alert(error.message || "No se pudo eliminar el empleado.");
     }
   }
 

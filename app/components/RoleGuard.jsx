@@ -5,6 +5,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { getRoleHome, getUserProfile, normalizeRole } from "@/lib/authRoles";
+import { canAccessRole } from "@/lib/permissions";
 
 export default function RoleGuard({ allowedRoles = [], children }) {
   const router = useRouter();
@@ -23,13 +24,14 @@ export default function RoleGuard({ allowedRoles = [], children }) {
           return;
         }
 
-        if (!profile.allowed || !allowed.includes(profile.role)) {
+        if (!profile.allowed || !canAccessRole(profile.role, allowed)) {
           router.push(getRoleHome(profile.role));
           return;
         }
 
         localStorage.setItem("userRole", profile.role);
         localStorage.setItem("userEmail", profile.email || "");
+        localStorage.setItem("empresaId", profile.empresaId || "proveedor-central");
         setAuthorized(true);
       } catch (error) {
         console.error("Error verificando rol:", error);

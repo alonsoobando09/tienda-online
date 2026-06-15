@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import RoleGuard from "@/app/components/RoleGuard";
@@ -22,6 +22,7 @@ import {
   sortClientesByRoute,
 } from "@/lib/operacion";
 import { getUserProfile } from "@/lib/authRoles";
+import { filterByEmpresa, withEmpresaId } from "@/lib/tenant";
 import {
   LocateFixed,
   MessageCircle,
@@ -132,6 +133,7 @@ function CarteristaContent() {
         const snap = await getDocs(collection(db, "autorizacionesRuta"));
         const activeAuthorization = snap.docs
           .map((docu) => ({ id: docu.id, ...docu.data() }))
+          .filter((item) => filterByEmpresa([item], nextProfile).length > 0)
           .find(
             (item) =>
               item.uid === nextProfile.uid &&
@@ -147,7 +149,11 @@ function CarteristaContent() {
         }
       }
 
-      if (!nextProfile.isAdmin && nextProfile.ruta) {
+      if (
+        !nextProfile.isAdmin &&
+        nextProfile.diaRuta === getTodayRouteDay() &&
+        nextProfile.ruta
+      ) {
         setRuta(nextProfile.ruta);
       }
     });
@@ -164,10 +170,14 @@ function CarteristaContent() {
       : "";
   const assignedRoute = profile?.isAdmin
     ? ruta
-    : autorizacion?.ruta || profile?.ruta || ruta;
+    : autorizacion?.ruta
+      ? autorizacion.ruta
+      : profile?.diaRuta === todayRouteDay
+        ? profile?.ruta || ""
+        : "";
   const canWorkToday = Boolean(assignedDay && assignedRoute);
 
-  async function cargarDatos(showLoading = true) {
+  const cargarDatos = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     const [clientesSnap, productosSnap, gastosSnap] = await Promise.all([
       getDocs(collection(db, "clientes")),
@@ -176,13 +186,26 @@ function CarteristaContent() {
     ]);
     setClientes(
       sortClientesByRoute(
-        clientesSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() }))
+        filterByEmpresa(
+          clientesSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
+          profile
+        )
       )
     );
-    setProductos(productosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })));
-    setGastosRuta(gastosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })));
+    setProductos(
+      filterByEmpresa(
+        productosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
+        profile
+      )
+    );
+    setGastosRuta(
+      filterByEmpresa(
+        gastosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
+        profile
+      )
+    );
     setLoading(false);
-  }
+  }, [profile]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -190,7 +213,7 @@ function CarteristaContent() {
     }, 0);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [cargarDatos]);
 
   const clientesRutaBase = useMemo(() => {
     return clientes
@@ -395,7 +418,7 @@ function CarteristaContent() {
     setSaving(true);
 
     try {
-      await addDoc(collection(db, "gastosRuta"), {
+      await addDoc(collection(db, "gastosRuta"), withEmpresaId({
         uid: profile?.uid || "",
         empleadoNombre: profile?.nombre || "",
         empleadoRol: profile?.role || "",
@@ -409,7 +432,7 @@ function CarteristaContent() {
         estado: "registrado",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      }, profile));
 
       setGastoForm(emptyGasto);
       await cargarDatos(false);
@@ -441,7 +464,7 @@ function CarteristaContent() {
         try {
           const fecha = new Date().toISOString().slice(0, 10);
 
-          await addDoc(collection(db, "ubicacionesRuta"), {
+          await addDoc(collection(db, "ubicacionesRuta"), withEmpresaId({
             uid: profile.uid,
             empleadoNombre: profile.nombre || "",
             empleadoRol: profile.role || "",
@@ -452,7 +475,7 @@ function CarteristaContent() {
             lng: position.coords.longitude,
             accuracy: position.coords.accuracy,
             timestamp: serverTimestamp(),
-          });
+          }, profile));
 
           setLocationMessage("Ubicacion enviada al administrador.");
         } catch (error) {
@@ -514,7 +537,7 @@ function CarteristaContent() {
 
       const clienteRef = doc(collection(db, "clientes"));
 
-      batch.set(clienteRef, {
+      batch.set(clienteRef, withEmpresaId({
         ...form,
         diaRuta: assignedDay,
         ruta: assignedRoute,
@@ -530,7 +553,7 @@ function CarteristaContent() {
         solicitudBorrado: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      }, profile));
 
       await batch.commit();
 
@@ -591,7 +614,7 @@ function CarteristaContent() {
       updatedAt: serverTimestamp(),
     });
 
-    batch.set(doc(collection(db, "gestionesRuta")), {
+    batch.set(doc(collection(db, "gestionesRuta")), withEmpresaId({
       clienteId: cliente.id,
       clienteNombre: cliente.nombre || "",
       telefono: cliente.telefono || "",
@@ -606,10 +629,10 @@ function CarteristaContent() {
       carteristaNombre: profile?.nombre || "",
       deudaActual: Number(cliente.deudaActual) || 0,
       createdAt: serverTimestamp(),
-    });
+    }, profile));
 
     if (riesgoPerdida || (clienteAtendido && clienteEnRiesgoAntes)) {
-      batch.set(doc(collection(db, "movimientosCartera")), {
+      batch.set(doc(collection(db, "movimientosCartera")), withEmpresaId({
         clienteId: cliente.id,
         clienteNombre: cliente.nombre || "",
         telefono: cliente.telefono || "",
@@ -626,7 +649,7 @@ function CarteristaContent() {
           : "Carterista encontro y atendio cliente en riesgo",
         estadoCliente: nextEstadoCliente,
         createdAt: serverTimestamp(),
-      });
+      }, profile));
     }
 
     await batch.commit();
@@ -774,7 +797,7 @@ function CarteristaContent() {
     setSaving(true);
 
     try {
-      const facturaPayload = {
+      const facturaPayload = withEmpresaId({
         tipo: "ruta",
         fecha: new Date().toISOString().slice(0, 10),
         diaRuta: assignedDay,
@@ -801,7 +824,7 @@ function CarteristaContent() {
         estado: "guardada",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      };
+      }, profile);
 
       const facturaRef = await addDoc(collection(db, "facturasRuta"), facturaPayload);
 
@@ -811,7 +834,7 @@ function CarteristaContent() {
         resumenVenta.fiadoHoy > 0 ||
         pago.observaciones.trim()
       ) {
-        await addDoc(collection(db, "movimientosCartera"), {
+        await addDoc(collection(db, "movimientosCartera"), withEmpresaId({
           clienteId: selectedCliente.id,
           clienteNombre: selectedCliente.nombre || "",
           telefono: selectedCliente.telefono || "",
@@ -830,7 +853,7 @@ function CarteristaContent() {
           nota: pago.observaciones.trim(),
           tipo: resumenVenta.abonoAnterior > 0 ? "abono_ruta" : "visita_ruta",
           createdAt: serverTimestamp(),
-        });
+        }, profile));
       }
 
       await updateDoc(doc(db, "clientes", selectedCliente.id), {
@@ -857,7 +880,7 @@ function CarteristaContent() {
         selectedCliente.riesgoPerdida ||
         selectedCliente.perdido
       ) {
-        await addDoc(collection(db, "movimientosCartera"), {
+        await addDoc(collection(db, "movimientosCartera"), withEmpresaId({
           clienteId: selectedCliente.id,
           clienteNombre: selectedCliente.nombre || "",
           telefono: selectedCliente.telefono || "",
@@ -873,7 +896,7 @@ function CarteristaContent() {
           nota: "Cliente en riesgo/perdido fue atendido y facturado en ruta",
           estadoCliente: "activo",
           createdAt: serverTimestamp(),
-        });
+        }, profile));
       }
 
       const facturaGuardada = { id: facturaRef.id, ...facturaPayload };
@@ -934,11 +957,17 @@ function CarteristaContent() {
       <section className="route-hero">
         <div>
           <p className="home-eyebrow">Modo carterista</p>
-          <h1>Ruta de {getDiaLabel(assignedDay) || "hoy"}</h1>
+          <h1>
+            {canWorkToday
+              ? `Ruta de ${getDiaLabel(assignedDay)}`
+              : "Sin ruta activa"}
+          </h1>
           <p>
             {profile?.isAdmin
               ? "Vista de administrador para revisar o probar rutas."
-              : `${profile?.nombre || "Usuario"} - ${assignedRoute || "sin ruta asignada"}`}
+              : canWorkToday
+                ? `${profile?.nombre || "Usuario"} - ${assignedRoute}`
+                : `${profile?.nombre || "Usuario"} - sin ruta autorizada hoy`}
           </p>
         </div>
         {profile?.isAdmin ? (
@@ -952,7 +981,7 @@ function CarteristaContent() {
         ) : (
           <div className="route-hero-actions">
             <div className="route-assigned-pill">
-              {assignedRoute || "Sin ruta"}
+              {canWorkToday ? assignedRoute : "Sin ruta"}
             </div>
             <button
               className="route-location-button"

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  Bug,
   Boxes,
   Calculator,
   ClipboardCheck,
@@ -13,6 +14,7 @@ import {
   FileText,
   Home,
   HandCoins,
+  History,
   Map,
   Package,
   PackageCheck,
@@ -25,6 +27,7 @@ import {
   UserRoundPlus,
   Users,
 } from "lucide-react";
+import { canAccessRole } from "@/lib/permissions";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: BarChart3, roles: ["admin"] },
@@ -61,6 +64,8 @@ const navItems = [
   },
   { href: "/admin/liquidaciones", label: "Liquidacion", icon: HandCoins, roles: ["admin"] },
   { href: "/admin/reportes", label: "Reportes", icon: ClipboardList, roles: ["admin"] },
+  { href: "/admin/auditoria", label: "Auditoria", icon: History, roles: ["admin"] },
+  { href: "/admin/errores", label: "Errores", icon: Bug, roles: ["admin"] },
   { href: "/admin/cuentas-pagar", label: "Por pagar", icon: CreditCard, roles: ["admin"] },
   { href: "/admin/inventario", label: "Inventario", icon: Boxes, roles: ["admin", "bodega"] },
   { href: "/admin/pedidos", label: "Pedidos", icon: ShoppingCart, roles: ["admin"] },
@@ -77,7 +82,7 @@ export default function AdminShell({ title, subtitle, actions, children }) {
     return localStorage.getItem("userRole") || "admin";
   });
 
-  const visibleNavItems = navItems.filter((item) => item.roles.includes(role));
+  const visibleNavItems = navItems.filter((item) => canAccessRole(role, item.roles));
 
   return (
     <div className="admin-shell">

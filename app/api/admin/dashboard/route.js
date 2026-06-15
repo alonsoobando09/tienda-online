@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { normalizeEmpresaId } from "@/lib/tenant";
+import { filterByEmpresaId } from "@/lib/firestoreTenant";
 
 function toDate(value) {
   if (!value) return null;
@@ -24,8 +26,19 @@ function dayKey(date) {
   });
 }
 
-export async function GET() {
+function getDebtColor(dias) {
+  const value = Number(dias) || 0;
+  if (value >= 60) return "negro";
+  if (value >= 30) return "rojo";
+  if (value >= 15) return "amarillo";
+  return "verde";
+}
+
+export async function GET(request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const empresaId = normalizeEmpresaId(searchParams.get("empresaId"));
+
     const [
       facturasSnapshot,
       productosSnapshot,
@@ -58,53 +71,82 @@ export async function GET() {
       fecha: toDate(docu.data().createdAt),
     }));
 
-    const productos = productosSnapshot.docs.map((docu) => ({
-      id: docu.id,
-      ...docu.data(),
-    }));
+    const productos = filterByEmpresaId(
+      productosSnapshot.docs.map((docu) => ({
+        id: docu.id,
+        ...docu.data(),
+      })),
+      empresaId
+    );
 
-    const clientesLista = clientesSnapshot.docs.map((docu) => ({
-      id: docu.id,
-      ...docu.data(),
-    }));
+    const clientesLista = filterByEmpresaId(
+      clientesSnapshot.docs.map((docu) => ({
+        id: docu.id,
+        ...docu.data(),
+      })),
+      empresaId
+    );
 
-    const recepciones = recepcionesSnapshot.docs.map((docu) => ({
-      id: docu.id,
-      ...docu.data(),
-    }));
+    const recepciones = filterByEmpresaId(
+      recepcionesSnapshot.docs.map((docu) => ({
+        id: docu.id,
+        ...docu.data(),
+      })),
+      empresaId
+    );
 
-    const liquidaciones = liquidacionesSnapshot.docs.map((docu) => ({
-      id: docu.id,
-      ...docu.data(),
-    }));
+    const liquidaciones = filterByEmpresaId(
+      liquidacionesSnapshot.docs.map((docu) => ({
+        id: docu.id,
+        ...docu.data(),
+      })),
+      empresaId
+    );
 
-    const despachos = despachosSnapshot.docs.map((docu) => ({
-      id: docu.id,
-      ...docu.data(),
-    }));
+    const despachos = filterByEmpresaId(
+      despachosSnapshot.docs.map((docu) => ({
+        id: docu.id,
+        ...docu.data(),
+      })),
+      empresaId
+    );
 
-    const facturasRuta = facturasRutaSnapshot.docs.map((docu) => ({
-      id: docu.id,
-      ...docu.data(),
-    }));
+    const facturasRuta = filterByEmpresaId(
+      facturasRutaSnapshot.docs.map((docu) => ({
+        id: docu.id,
+        ...docu.data(),
+      })),
+      empresaId
+    );
 
-    const compras = comprasSnapshot.docs.map((docu) => ({
-      id: docu.id,
-      ...docu.data(),
-    }));
+    const compras = filterByEmpresaId(
+      comprasSnapshot.docs.map((docu) => ({
+        id: docu.id,
+        ...docu.data(),
+      })),
+      empresaId
+    );
 
-    const cuentasPagar = cuentasPagarSnapshot.docs.map((docu) => ({
-      id: docu.id,
-      ...docu.data(),
-    }));
+    const cuentasPagar = filterByEmpresaId(
+      cuentasPagarSnapshot.docs.map((docu) => ({
+        id: docu.id,
+        ...docu.data(),
+      })),
+      empresaId
+    );
 
-    const gestionesRuta = gestionesSnapshot.docs.map((docu) => ({
-      id: docu.id,
-      ...docu.data(),
-    }));
+    const gestionesRuta = filterByEmpresaId(
+      gestionesSnapshot.docs.map((docu) => ({
+        id: docu.id,
+        ...docu.data(),
+      })),
+      empresaId
+    );
+
+    const facturasEmpresa = filterByEmpresaId(facturas, empresaId);
 
     const fechaHoy = hoy.toISOString().slice(0, 10);
-    const ventasHoyLista = facturas.filter((factura) =>
+    const ventasHoyLista = facturasEmpresa.filter((factura) =>
       sameDay(factura.fecha, hoy)
     );
 
@@ -175,12 +217,12 @@ export async function GET() {
       return acc + stock * costo;
     }, 0);
 
-    const pagosPendientes = facturas.filter(
+    const pagosPendientes = facturasEmpresa.filter(
       (factura) => factura.estado === "pendiente"
     ).length;
 
     const clientesFacturados = new Set(
-      facturas
+      facturasEmpresa
         .map((factura) => factura.cliente?.telefono || factura.cliente?.email)
         .filter(Boolean)
     ).size;
@@ -235,6 +277,70 @@ export async function GET() {
       (cliente) => cliente.estadoCliente === "riesgo_perdida" || cliente.riesgoPerdida
     ).length;
 
+    const carteraPorRutaMap = new Map();
+    clientesLista.forEach((cliente) => {
+      const deuda = Number(cliente.deudaActual) || 0;
+      if (deuda <= 0) return;
+
+      const diaRuta = cliente.diaRuta || "sin-dia";
+      const ruta = cliente.ruta || "Sin ruta";
+      const key = `${diaRuta}__${ruta}`;
+      const current =
+        carteraPorRutaMap.get(key) ||
+        {
+          key,
+          diaRuta,
+          ruta,
+          clientes: 0,
+          deuda: 0,
+          rojoNegro: 0,
+          deudaRojoNegro: 0,
+          riesgo: 0,
+          deudaRiesgo: 0,
+          perdidos: 0,
+          deudaPerdida: 0,
+          mayorDias: 0,
+        };
+      const dias = Number(cliente.diasDeuda) || 0;
+      const color = cliente.semaforoDeuda || getDebtColor(dias);
+      const enRiesgo =
+        cliente.estadoCliente === "riesgo_perdida" || cliente.riesgoPerdida;
+      const perdido = cliente.estadoCliente === "perdido" || cliente.perdido;
+
+      current.clientes += 1;
+      current.deuda += deuda;
+      current.mayorDias = Math.max(current.mayorDias, dias);
+
+      if (color === "rojo" || color === "negro") {
+        current.rojoNegro += 1;
+        current.deudaRojoNegro += deuda;
+      }
+
+      if (enRiesgo) {
+        current.riesgo += 1;
+        current.deudaRiesgo += deuda;
+      }
+
+      if (perdido) {
+        current.perdidos += 1;
+        current.deudaPerdida += deuda;
+      }
+
+      carteraPorRutaMap.set(key, current);
+    });
+
+    const carteraCriticaPorRuta = [...carteraPorRutaMap.values()]
+      .map((item) => ({
+        ...item,
+        prioridad:
+          item.deudaPerdida * 4 +
+          item.deudaRiesgo * 3 +
+          item.deudaRojoNegro * 2 +
+          item.deuda,
+      }))
+      .sort((a, b) => b.prioridad - a.prioridad)
+      .slice(0, 6);
+
     const graficoMap = new Map();
     for (let i = 6; i >= 0; i--) {
       const date = new Date(hoy);
@@ -242,7 +348,7 @@ export async function GET() {
       graficoMap.set(dayKey(date), 0);
     }
 
-    facturas.forEach((factura) => {
+    facturasEmpresa.forEach((factura) => {
       if (!factura.fecha) return;
       const key = dayKey(factura.fecha);
       if (graficoMap.has(key)) {
@@ -506,6 +612,7 @@ export async function GET() {
       clientesOrdenPendiente,
       clientesPerdidos,
       clientesRiesgoPerdida,
+      carteraCriticaPorRuta,
       recepcionesConAlertas: recepcionesConAlertas.length,
       liquidacionesConAlertas: liquidacionesConAlertas.length,
       diferenciaSurtido,
@@ -517,15 +624,17 @@ export async function GET() {
       totalStock: totalInventario,
       valorInventario,
       ticketPromedio:
-        facturas.length > 0
-          ? facturas.reduce((acc, factura) => acc + (Number(factura.total) || 0), 0) /
-            facturas.length
+        facturasEmpresa.length > 0
+          ? facturasEmpresa.reduce(
+              (acc, factura) => acc + (Number(factura.total) || 0),
+              0
+            ) / facturasEmpresa.length
           : 0,
       grafico: Array.from(graficoMap.entries()).map(([dia, ventas]) => ({
         dia,
         ventas,
       })),
-      ultimasVentas: facturas.slice(0, 8),
+      ultimasVentas: facturasEmpresa.slice(0, 8),
       productos: productos.slice(0, 12),
       bajoStock,
     });

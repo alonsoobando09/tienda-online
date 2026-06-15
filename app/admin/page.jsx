@@ -40,8 +40,10 @@ export default function AdminPage() {
 
   useEffect(() => {
     let active = true;
+    const empresaId = localStorage.getItem("empresaId") || "proveedor-central";
+    const params = new URLSearchParams({ empresaId });
 
-    fetch("/api/admin/dashboard")
+    fetch(`/api/admin/dashboard?${params.toString()}`)
       .then((res) => {
         if (!res.ok) throw new Error("No se pudo cargar el dashboard");
         return res.json();
@@ -184,6 +186,93 @@ export default function AdminPage() {
                 <p>Riesgo hoy</p>
                 <h2>{data.clientesRiesgoGestionHoy || 0}</h2>
                 <span>{money.format(data.deudaGestionadaHoy || 0)} revisado en ruta.</span>
+              </article>
+            </section>
+
+            <section className="admin-grid dashboard-main-grid">
+              <article className="admin-card">
+                <div className="admin-section-title">
+                  <div>
+                    <h2>Rutas con cartera critica</h2>
+                    <p>Prioridad por plata perdida, riesgo y deuda vencida.</p>
+                  </div>
+                  <Link className="admin-button secondary" href="/admin/cartera">
+                    Abrir cartera
+                  </Link>
+                </div>
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Ruta</th>
+                      <th>Cartera</th>
+                      <th>Riesgo</th>
+                      <th>Perdidos</th>
+                      <th>Dias</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data.carteraCriticaPorRuta || []).map((grupo) => (
+                      <tr key={grupo.key}>
+                        <td>
+                          {grupo.diaRuta}
+                          <br />
+                          <small>{grupo.ruta}</small>
+                        </td>
+                        <td>{money.format(grupo.deuda || 0)}</td>
+                        <td>
+                          <span className={`debt-pill ${grupo.riesgo ? "gris" : "verde"}`}>
+                            {grupo.riesgo || 0}
+                          </span>
+                          <br />
+                          <small>{money.format(grupo.deudaRiesgo || 0)}</small>
+                        </td>
+                        <td>
+                          <span
+                            className={`debt-pill ${
+                              grupo.perdidos ? "negro" : "verde"
+                            }`}
+                          >
+                            {grupo.perdidos || 0}
+                          </span>
+                          <br />
+                          <small>{money.format(grupo.deudaPerdida || 0)}</small>
+                        </td>
+                        <td>{grupo.mayorDias || 0}</td>
+                      </tr>
+                    ))}
+                    {!data.carteraCriticaPorRuta?.length && (
+                      <tr>
+                        <td colSpan="5">Sin cartera critica por ruta.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </article>
+
+              <article className="admin-card">
+                <h2>Control de cartera</h2>
+                <div className="liquidation-lines">
+                  <span>Cartera total</span>
+                  <strong>{money.format(data.carteraTotal || 0)}</strong>
+                  <span>Cartera vencida</span>
+                  <strong>{money.format(data.carteraVencida || 0)}</strong>
+                  <span>Clientes con deuda</span>
+                  <strong>{data.clientesConDeuda || 0}</strong>
+                  <span>Riesgo gris</span>
+                  <strong>{data.clientesRiesgoMarcado || 0}</strong>
+                  <span>Perdidos con deuda</span>
+                  <strong>{data.clientesPerdidosConDeuda || 0}</strong>
+                  <span>Orden pendiente</span>
+                  <strong>{data.clientesOrdenPendiente || 0}</strong>
+                </div>
+                <div className="admin-toolbar-actions" style={{ marginTop: 14 }}>
+                  <Link className="admin-button secondary" href="/admin/clientes">
+                    Clientes
+                  </Link>
+                  <Link className="admin-button secondary" href="/admin/cartera">
+                    Cobrar
+                  </Link>
+                </div>
               </article>
             </section>
 

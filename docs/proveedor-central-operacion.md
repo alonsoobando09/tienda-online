@@ -20,6 +20,125 @@ liquidacion diaria.
 - Ayudante: puede apoyar la ruta, registrar clientes abiertos y entregar
   productos, segun permisos.
 
+## Multiempresa y aislamiento de datos
+
+Proveedor Central queda preparado como sistema multiempresa:
+
+- Cada usuario debe tener `empresaId` en `usuarios/{uid}`.
+- Cada documento operativo debe guardar `empresaId`.
+- Si un documento antiguo no tiene `empresaId`, el sistema lo trata como
+  `proveedor-central` para permitir migracion ordenada.
+- Ninguna empresa debe leer, editar o borrar documentos de otra empresa.
+- El correo principal del propietario conserva acceso administrador a la empresa
+  base `proveedor-central`.
+
+Arquitectura tecnica:
+
+- `lib/tenant.js`: normaliza la empresa actual y mantiene compatibilidad con
+  documentos antiguos.
+- `lib/firestoreTenant.js`: filtra, valida y prepara datos asociados a empresa.
+- `lib/permissions.js`: centraliza roles y permisos del sistema.
+- `lib/audit.js`: registra eventos criticos en la coleccion `auditoria`.
+- `firestore.rules`: bloquea lectura/escritura entre empresas desde Firebase.
+- `app/api/admin/auditoria`: API protegida por token para consultar auditoria
+  sin exponer datos de otra empresa.
+- `app/api/admin/empleados`: API protegida para crear, editar y eliminar
+  empleados/usuarios, validando empresa y registrando auditoria.
+- `app/api/admin/cartera`: API protegida para abonos, ajustes de deuda, notas,
+  riesgo de perdida, clientes perdidos y recuperados, con auditoria.
+- `app/api/admin/clientes`: API protegida para crear, editar, eliminar,
+  reordenar, aprobar orden, quitar solicitudes de borrado y cambiar estados de
+  clientes con auditoria.
+- `app/admin/auditoria`: pantalla administrativa para revisar historial de
+  cambios por usuario, modulo, accion y documento.
+
+Colecciones que deben quedar aisladas por empresa:
+
+- `productos`
+- `clientes`
+- `empleados`
+- `proveedores`
+- `compras`
+- `cuentasPagar`
+- `despachos`
+- `recepciones`
+- `liquidaciones`
+- `facturas`
+- `facturasRuta`
+- `gastosRuta`
+- `gestionesRuta`
+- `movimientosCartera`
+- `ubicacionesRuta`
+- `kardex`
+- `autorizacionesRuta`
+
+Roles y permisos:
+
+- `superadmin`: administra la plataforma y puede crear o suspender empresas.
+- `admin`: administra toda la empresa actual.
+- `bodega`: despachos, compras, inventario y recepciones de su empresa.
+- `carterista`: solo ruta, clientes, facturas, gastos y ubicacion de su empresa.
+- `ayudante`: apoyo operativo de ruta de su empresa.
+
+Validaciones de seguridad:
+
+- Las reglas de Firestore viven en `firestore.rules`.
+- Toda lectura exige que `empresaId` del documento coincida con `empresaId` del
+  usuario autenticado.
+- Toda creacion exige que el documento nuevo tenga el mismo `empresaId` del
+  usuario.
+- Toda actualizacion conserva el `empresaId`; no se permite cambiar un documento
+  de empresa.
+- Solo admin puede borrar documentos de su empresa.
+
+Para activar seguridad multiempresa en produccion:
+
+1. Crear coleccion `empresas`.
+2. Agregar `empresaId` a cada documento de `usuarios`.
+3. Ejecutar `npm run tenant:check` para revisar cuantos documentos antiguos no
+   tienen empresa.
+4. Ejecutar `npm run tenant:migrate` para agregar `empresaId:
+   "proveedor-central"` a documentos antiguos.
+5. Publicar `firestore.rules` en Firebase.
+6. A partir de ahi, crear nuevas empresas con su propio `empresaId`.
+
+## Operacion segura: backups, errores y pruebas
+
+Copias de seguridad:
+
+- El comando `npm run backup` genera una copia JSON de las colecciones
+  principales en la carpeta local `backups`.
+- El comando `npm run backup:proveedor-central` respalda solo la empresa base
+  `proveedor-central`.
+- El comando `npm run backup:install-task` instala una tarea diaria de Windows
+  llamada `ProveedorCentralBackup` para ejecutar el backup automaticamente.
+- La carpeta `backups` no se sube a Git porque puede contener datos sensibles.
+- En Windows se puede programar una tarea diaria para ejecutar `npm run backup`
+  desde la carpeta del proyecto.
+- Antes de cambios grandes, deploy o migraciones de datos, se debe crear backup.
+
+Registro de errores:
+
+- Los errores del navegador se registran en `erroresSistema`.
+- Los errores graves de pantalla quedan guardados desde `app/error.jsx`.
+- Cada error incluye ruta, usuario, rol, empresa, navegador y mensaje.
+- Esta informacion permite revisar fallos sin depender de pantallazos.
+- El administrador tiene el panel `Errores` para ver errores por empresa,
+  filtrar por estado, area o texto y marcar cada caso como revisado o resuelto.
+- El panel muestra alertas de errores abiertos, revisados, resueltos y errores
+  recientes para priorizar lo urgente.
+
+Ambiente de pruebas:
+
+- Existe `.env.test.example` como plantilla.
+- El ambiente de pruebas debe usar Firebase y Mercado Pago de prueba, nunca datos
+  reales de produccion.
+- El comando `npm run project:check` revisa archivos criticos y variables antes
+  de subir cambios importantes.
+- El comando `npm run test:build` compila usando `NEXT_PUBLIC_APP_ENV=test`.
+- Las pruebas de rutas, despachos, recepciones, liquidaciones y multiempresa se
+  deben hacer primero en este ambiente.
+
 ## Acceso y permisos
 
 Los usuarios se controlan desde Firebase Authentication y la coleccion
@@ -36,6 +155,14 @@ Reglas de entrada:
 - `bodega`: entra a despacho, recepcion e inventario.
 - `carterista`: entra a `/carterista`.
 - `ayudante`: entra a `/carterista` para apoyar la ruta.
+
+Autorizaciones de ruta:
+
+- Una autorizacion solo habilita la ruta en la fecha exacta autorizada.
+- Las autorizaciones activas de fechas anteriores se muestran como vencidas y
+  no habilitan al carterista.
+- Si hoy no coincide el dia normal del empleado y tampoco existe autorizacion
+  de hoy, Carterista debe mostrar `Sin ruta activa` y no una ruta vieja.
 
 El correo principal `alriver1995zit@gmail.com` siempre se reconoce como
 administrador.
@@ -818,6 +945,8 @@ Debe mostrar:
 - Compras con alerta por diferencia de factura.
 - Prioridades accionables con boton directo al modulo que debe revisarse.
 - Alertas de gestiones cuando hay clientes marcados en riesgo o no disponibles.
+- Rutas con cartera critica ordenadas por plata perdida, riesgo y deuda vencida.
+- Control de cartera con acceso directo a Clientes y Cartera.
 
 El Dashboard funciona como centro de mando diario: al abrir el administrador se
 debe ver primero la caja, la cartera, proveedores, rutas y alertas operativas

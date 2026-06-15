@@ -14,6 +14,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { diasRuta, getDiaLabel, rutasBase } from "@/lib/operacion";
+import { DEFAULT_EMPRESA_ID, normalizeEmpresaId } from "@/lib/tenant";
 import { Save, Search, ShieldCheck, Trash2 } from "lucide-react";
 
 const emptyForm = {
@@ -100,13 +101,14 @@ export default function AutorizacionesPage() {
     return autorizaciones.reduce(
       (acc, item) => {
         acc.total += 1;
-        if (item.estado === "activa") acc.activas += 1;
+        if (item.estado === "activa" && item.fecha >= today) acc.activas += 1;
+        if (item.estado === "activa" && item.fecha < today) acc.vencidas += 1;
         if (item.estado !== "activa") acc.pausadas += 1;
         if (item.fecha === today && item.estado === "activa") acc.hoy += 1;
         if (item.fecha >= today && item.estado === "activa") acc.vigentes += 1;
         return acc;
       },
-      { total: 0, activas: 0, pausadas: 0, hoy: 0, vigentes: 0 }
+      { total: 0, activas: 0, pausadas: 0, hoy: 0, vigentes: 0, vencidas: 0 }
     );
   }, [autorizaciones]);
 
@@ -154,6 +156,7 @@ export default function AutorizacionesPage() {
       batch.set(autorizacionRef, {
         empleadoId: empleado.id,
         uid: empleado.uid,
+        empresaId: normalizeEmpresaId(empleado.empresaId || DEFAULT_EMPRESA_ID),
         empleadoNombre: empleado.nombre || "",
         empleadoRol: empleado.rol || "",
         fecha: form.fecha,
@@ -235,9 +238,9 @@ export default function AutorizacionesPage() {
             <p>Excepciones activas del dia.</p>
           </article>
           <article className="admin-card admin-stat-gold">
-            <h3>Activas</h3>
-            <h2>{resumen.activas}</h2>
-            <p>Total historico activo.</p>
+            <h3>Vencidas</h3>
+            <h2>{resumen.vencidas}</h2>
+            <p>Activas antiguas que ya no aplican.</p>
           </article>
           <article className="admin-card admin-stat-red">
             <h3>Pausadas</h3>

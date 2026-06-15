@@ -1,0 +1,93 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwnerAdmin() {
+      return signedIn() &&
+        (
+          request.auth.token.email == "alriver1995zit@gmail.com" ||
+          request.auth.token.admin == true ||
+          request.auth.token.superadmin == true
+        );
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+
+    function hasUserProfile() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+
+    function userEmpresaId() {
+      return isOwnerAdmin()
+        ? "proveedor-central"
+        : userDoc().data.empresaId;
+    }
+
+    function userRole() {
+      return isOwnerAdmin()
+        ? "superadmin"
+        : userDoc().data.rol;
+    }
+
+    function activeUser() {
+      return isOwnerAdmin() ||
+        (
+          hasUserProfile() &&
+          !(userDoc().data.estado in ["inactivo", "bloqueado"])
+        );
+    }
+
+    function docEmpresaId(data) {
+      return data.empresaId == null ? "proveedor-central" : data.empresaId;
+    }
+
+    function sameEmpresa(data) {
+      return activeUser() && docEmpresaId(data) == userEmpresaId();
+    }
+
+    function createSameEmpresa() {
+      return activeUser() &&
+        request.resource.data.empresaId == userEmpresaId();
+    }
+
+    function updateSameEmpresa() {
+      return sameEmpresa(resource.data) &&
+        request.resource.data.empresaId == docEmpresaId(resource.data);
+    }
+
+    function roleIn(roles) {
+      return activeUser() && (userRole() == "superadmin" || userRole() in roles);
+    }
+
+    match /usuarios/{uid} {
+      allow read: if isOwnerAdmin() || request.auth.uid == uid || roleIn(["admin"]);
+      allow create, update: if roleIn(["admin"]);
+      allow delete: if roleIn(["admin"]);
+    }
+
+    match /empresas/{empresaId} {
+      allow read: if activeUser() && (userRole() == "superadmin" || empresaId == userEmpresaId());
+      allow write: if isOwnerAdmin();
+    }
+
+    match /auditoria/{docId} {
+      allow read: if roleIn(["admin"]) && sameEmpresa(resource.data);
+      allow create: if createSameEmpresa();
+      allow update, delete: if false;
+    }
+
+    match /{collectionId}/{docId} {
+      allow read: if sameEmpresa(resource.data);
+      allow create: if createSameEmpresa();
+      allow update: if updateSameEmpresa();
+      allow delete: if roleIn(["admin"]) && sameEmpresa(resource.data);
+    }
+  }
+}
