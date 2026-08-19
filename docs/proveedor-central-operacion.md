@@ -5,6 +5,21 @@
 Convertir Proveedor Central en una aplicacion de trabajo para administrador,
 bodega, carteristas y ayudantes desde computador, tablet o celular.
 
+El proyecto queda separado en dos productos dentro del mismo sistema:
+
+- Tienda virtual publica: inicia en `/`, muestra categorias, productos, carrito,
+  checkout, WhatsApp y pagos online.
+- App operativa multiempresa: inicia en `/app`, se instala como PWA y conecta
+  administrador, bodega, carteristas, rutas, clientes, despachos, inventario,
+  cartera, compras, recepciones, GPS, liquidaciones y reportes.
+
+Regla visual:
+
+- La tienda publica usa header, carrito, WhatsApp y botones comerciales.
+- La app operativa no carga elementos de tienda; usa pantallas de trabajo
+  limpias para computador, tablet y celular.
+- `/admin`, `/carterista` y `/app` pertenecen a la app operativa.
+
 El negocio no funciona como una tienda normal: funciona con bodega, despacho de
 surtido, rutas semanales, cartera, cobros, fiados, devoluciones, descuadres y
 liquidacion diaria.
@@ -49,6 +64,12 @@ Arquitectura tecnica:
 - `app/api/admin/clientes`: API protegida para crear, editar, eliminar,
   reordenar, aprobar orden, quitar solicitudes de borrado y cambiar estados de
   clientes con auditoria.
+- `app/api/admin/autorizaciones`: API protegida para crear, pausar, reactivar
+  o eliminar autorizaciones de ruta, reemplazando permisos activos duplicados
+  del mismo empleado/fecha.
+- `app/api/admin/recepciones`: API protegida para recibir despachos,
+  recalcular devoluciones, validar que lo devuelto no supere lo despachado,
+  devolver inventario, generar kardex y registrar descuadres con auditoria.
 - `app/admin/auditoria`: pantalla administrativa para revisar historial de
   cambios por usuario, modulo, accion y documento.
 
@@ -212,6 +233,8 @@ Reglas de seguridad:
   rutas abiertas el mismo dia.
 - Si se reactiva una autorizacion anterior, tambien reemplaza cualquier otra
   autorizacion activa del mismo empleado y fecha.
+- El panel de autorizaciones y el modo carterista filtran permisos por
+  `empresaId` para que un usuario no vea ni use autorizaciones de otra empresa.
 - Cada autorizacion exige motivo y muestra la ruta normal del empleado para que
   el administrador apruebe la excepcion con contexto.
 - El panel de Rutas muestra alertas por planilla: clientes en riesgo, perdidos,
@@ -551,8 +574,12 @@ Recibo al final del dia:
   - Lo que se vendio de contado.
   - Lo que falta o sobra.
 - La recepcion nocturna devuelve inventario automaticamente a bodega.
+- La recepcion se guarda desde backend protegido; el navegador no modifica
+  inventario ni kardex directamente.
 - Los productos dejados ya no se escriben a mano: se calculan automaticamente
   como `salio - devuelto`.
+- Si se intenta recibir una cantidad mayor a lo despachado, el sistema bloquea
+  el guardado porque puede indicar mal conteo, mal despacho o error de digitacion.
 - El sistema compara lo dejado fisicamente contra lo facturado en clientes.
 - Si lo dejado fisicamente es mayor que lo facturado, queda como producto
   faltante o producto dejado sin registrar.

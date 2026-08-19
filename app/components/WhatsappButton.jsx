@@ -1,8 +1,14 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { MessageCircle } from "lucide-react";
+import { isOperationalPath } from "@/lib/routeZones";
 
 export default function WhatsappButton() {
+  const pathname = usePathname();
+
+  if (isOperationalPath(pathname)) return null;
+
   return (
     <a
       aria-label="Comprar por WhatsApp"

@@ -1,0 +1,56 @@
+{
+  "name": "Proveedor Central App",
+  "short_name": "Proveedor Central",
+  "description": "Sistema operativo multiempresa para bodega, rutas, cartera, inventario, despachos y facturacion.",
+  "id": "/app",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#062819",
+  "theme_color": "#062819",
+  "categories": ["business", "productivity", "shopping"],
+  "icons": [
+    {
+      "src": "/icons/proveedor-central-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/proveedor-central-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/proveedor-central.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Administrador",
+      "short_name": "Admin",
+      "description": "Abrir el panel administrativo",
+      "url": "/admin",
+      "icons": [{ "src": "/icons/proveedor-central-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Carterista",
+      "short_name": "Ruta",
+      "description": "Abrir la ruta del carterista",
+      "url": "/carterista",
+      "icons": [{ "src": "/icons/proveedor-central-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Despachos",
+      "short_name": "Bodega",
+      "description": "Abrir despachos de bodega",
+      "url": "/admin/despachos",
+      "icons": [{ "src": "/icons/proveedor-central-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

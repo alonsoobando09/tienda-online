@@ -11,6 +11,201 @@ body {
   color: #16231d;
 }
 
+.pc-app-gateway {
+  min-height: 100svh;
+  background:
+    linear-gradient(135deg, rgba(6, 40, 25, 0.98), rgba(13, 62, 40, 0.96)),
+    #062819;
+  color: #f8f4ea;
+  padding: 28px;
+}
+
+.pc-app-hero {
+  align-items: center;
+  display: grid;
+  gap: 28px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  margin: 0 auto;
+  max-width: 1180px;
+  min-height: 52svh;
+  padding: 54px 0 28px;
+}
+
+.pc-app-hero h1 {
+  color: #fffaf0;
+  font-size: clamp(42px, 7vw, 82px);
+  line-height: 0.95;
+  margin: 10px 0 18px;
+  max-width: 780px;
+}
+
+.pc-app-hero p {
+  color: rgba(248, 244, 234, 0.82);
+  font-size: 20px;
+  line-height: 1.45;
+  max-width: 760px;
+}
+
+.pc-app-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.pc-app-device {
+  aspect-ratio: 0.72;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06)),
+    #071f16;
+  border: 1px solid rgba(244, 240, 230, 0.22);
+  border-radius: 34px;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.28);
+  display: grid;
+  justify-items: center;
+  max-height: 520px;
+  padding: 42px 26px;
+  place-content: center;
+  text-align: center;
+}
+
+.pc-app-device span {
+  align-items: center;
+  background: #d8ae4f;
+  border-radius: 22px;
+  color: #062819;
+  display: grid;
+  font-size: 34px;
+  font-weight: 900;
+  height: 94px;
+  margin-bottom: 28px;
+  width: 94px;
+}
+
+.pc-app-device strong {
+  color: #fffaf0;
+  font-size: 28px;
+}
+
+.pc-app-device small {
+  color: rgba(248, 244, 234, 0.68);
+  font-size: 15px;
+  margin-top: 10px;
+}
+
+.pc-app-modules,
+.pc-app-capabilities {
+  display: grid;
+  gap: 14px;
+  margin: 20px auto 0;
+  max-width: 1180px;
+}
+
+.pc-app-modules {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.pc-app-module {
+  background: rgba(248, 244, 234, 0.96);
+  border: 1px solid rgba(248, 244, 234, 0.2);
+  border-radius: 16px;
+  color: #09251a;
+  display: grid;
+  gap: 10px;
+  min-height: 190px;
+  padding: 22px;
+  text-decoration: none;
+}
+
+.pc-app-module:hover {
+  transform: translateY(-2px);
+}
+
+.pc-app-module svg {
+  color: #0b6b3a;
+}
+
+.pc-app-module strong {
+  font-size: 21px;
+}
+
+.pc-app-module span {
+  color: rgba(9, 37, 26, 0.7);
+  line-height: 1.4;
+}
+
+.pc-app-capabilities {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  padding-bottom: 34px;
+}
+
+.pc-app-capabilities div {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  display: flex;
+  gap: 10px;
+  min-height: 78px;
+  padding: 14px;
+}
+
+.pc-app-capabilities svg {
+  color: #d8ae4f;
+  flex: 0 0 auto;
+}
+
+.pc-app-capabilities span {
+  color: rgba(248, 244, 234, 0.84);
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+@media (max-width: 1000px) {
+  .pc-app-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .pc-app-device {
+    aspect-ratio: auto;
+    max-height: none;
+    min-height: 280px;
+  }
+
+  .pc-app-modules {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pc-app-capabilities {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .pc-app-gateway {
+    padding: 16px;
+  }
+
+  .pc-app-hero {
+    min-height: auto;
+    padding-top: 26px;
+  }
+
+  .pc-app-hero p {
+    font-size: 17px;
+  }
+
+  .pc-app-actions,
+  .pc-app-actions .home-button {
+    width: 100%;
+  }
+
+  .pc-app-modules,
+  .pc-app-capabilities {
+    grid-template-columns: 1fr;
+  }
+}
+
 a {
   text-decoration: none;
   color: inherit;

@@ -2,13 +2,18 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Menu, ShoppingCart, Store, X } from "lucide-react";
 import { useCart } from "@/app/context/CartContext";
+import { isOperationalPath } from "@/lib/routeZones";
 
 export default function Header() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
   const { cart } = useCart();
   const totalItems = cart.reduce((acc, p) => acc + (p.cantidad || 1), 0);
+
+  if (isOperationalPath(pathname)) return null;
 
   function closeMenu() {
     setOpen(false);
@@ -55,11 +60,8 @@ export default function Header() {
         <Link href="/carrito" onClick={closeMenu}>
           Carrito
         </Link>
-        <Link href="/carterista" onClick={closeMenu}>
-          Carterista
-        </Link>
-        <Link href="/login" onClick={closeMenu}>
-          Admin
+        <Link href="/app" onClick={closeMenu}>
+          App operativa
         </Link>
         </nav>
       )}

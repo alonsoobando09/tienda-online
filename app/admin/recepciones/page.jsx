@@ -3,19 +3,16 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import {
   collection,
-  doc,
   getDocs,
-  increment,
-  serverTimestamp,
-  writeBatch,
+  query,
+  where,
 } from "firebase/firestore";
 import { money } from "@/lib/operacion";
+import { getCurrentEmpresaId } from "@/lib/tenant";
 import { ReceiptText, Save } from "lucide-react";
-
-const today = new Date().toISOString().slice(0, 10);
 
 const emptyCash = {
   efectivo: "",
@@ -45,6 +42,7 @@ export default function RecepcionesAdminPage() {
   const [saving, setSaving] = useState(false);
 
   async function cargarDatos() {
+    const empresaId = getCurrentEmpresaId();
     const [
       despachosSnap,
       recepcionesSnap,
@@ -52,11 +50,11 @@ export default function RecepcionesAdminPage() {
       gastosSnap,
       gestionesSnap,
     ] = await Promise.all([
-      getDocs(collection(db, "despachos")),
-      getDocs(collection(db, "recepciones")),
-      getDocs(collection(db, "facturasRuta")),
-      getDocs(collection(db, "gastosRuta")),
-      getDocs(collection(db, "gestionesRuta")),
+      getDocs(query(collection(db, "despachos"), where("empresaId", "==", empresaId))),
+      getDocs(query(collection(db, "recepciones"), where("empresaId", "==", empresaId))),
+      getDocs(query(collection(db, "facturasRuta"), where("empresaId", "==", empresaId))),
+      getDocs(query(collection(db, "gastosRuta"), where("empresaId", "==", empresaId))),
+      getDocs(query(collection(db, "gestionesRuta"), where("empresaId", "==", empresaId))),
     ]);
 
     const data = despachosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() }));
@@ -416,158 +414,39 @@ export default function RecepcionesAdminPage() {
     setSaving(true);
 
     try {
-      const recepcionRef = doc(collection(db, "recepciones"));
-      const batch = writeBatch(db);
-      const cleanItems = items.map((item) => {
-        const cantidad = number(item.cantidad);
-        const devuelto = number(item.devuelto);
-        const dejado = cantidad - devuelto;
-        const facturado = facturadoPorProducto.get(item.productoId) || {
-          cantidad: 0,
-          valor: 0,
-        };
-        const diferenciaFacturado = dejado - facturado.cantidad;
-        const faltante = Math.max(diferenciaFacturado, 0);
-
-        return {
-          ...item,
-          cantidad,
-          devuelto,
-          dejado,
-          dejadoFacturado: facturado.cantidad,
-          valorFacturado: facturado.valor,
-          diferenciaFacturado,
-          faltante,
-          valorDejado: dejado * number(item.precioDetal),
-          costoFaltante: faltante * number(item.costo),
-        };
-      });
-
-      batch.set(recepcionRef, {
-        despachoId: despacho.id,
-        fechaRecepcion: today,
-        fechaDespacho: despacho.fecha || "",
-        diaRuta: despacho.diaRuta || "",
-        ruta: despacho.ruta || "",
-        carteristaId: despacho.carteristaId || "",
-        carteristaNombre: despacho.carteristaNombre || "",
-        ayudanteId: despacho.ayudanteId || "",
-        ayudanteNombre: despacho.ayudanteNombre || "",
-        items: cleanItems,
-        totalDespachado: resumen.despachado,
-        totalDevuelto: resumen.devuelto,
-        totalDejado: resumen.dejadoFisico,
-        totalDejadoFacturado: resumen.dejadoFacturado,
-        diferenciaDejadoFacturado: resumen.diferencia,
-        totalFaltante: resumen.faltante,
-        valorProductosDejados: resumenFacturado.valor,
-        valorProductosDejadosFisico: resumen.valorFisicoEstimado,
-        costoFaltante: resumen.costoFaltante,
-        dineroEntregado: totalPagosRecibidos,
-        pagosRuta: {
-          efectivo: number(cash.efectivo),
-          nequi: number(cash.nequi),
-          daviplata: number(cash.daviplata),
-          bancolombia: number(cash.bancolombia),
-          otros: number(cash.otrosPagos),
-          referencia: cash.referenciaPagos.trim(),
-          total: totalPagosRecibidos,
-        },
-        dineroEsperado,
-        gastosRuta: number(cash.gastosRuta),
-        prestamos: number(cash.prestamos),
-        gastosRutaRegistrados: gastosDelDespacho.map((gasto) => gasto.id),
-        resumenGastosRuta: resumenGastosRegistrados,
-        gestionesRutaIds: gestionesDelDespacho.map((gestion) => gestion.id),
-        totalGestionesRuta: resumenGestiones.total,
-        clientesVisitadosRuta: resumenGestiones.visitado,
-        clientesNoDisponiblesRuta: resumenGestiones.no_encontrado,
-        clientesRiesgoRuta: resumenGestiones.riesgo_perdida,
-        deudaGestionadaRuta: resumenGestiones.deuda,
-        carteristasConGestionRuta: resumenGestiones.carteristas.size,
-        resumenGestionesRuta: {
-          total: resumenGestiones.total,
-          pendiente: resumenGestiones.pendiente,
-          visitado: resumenGestiones.visitado,
-          no_encontrado: resumenGestiones.no_encontrado,
-          riesgo_perdida: resumenGestiones.riesgo_perdida,
-          deuda: resumenGestiones.deuda,
-          carteristas: resumenGestiones.carteristas.size,
-        },
-        descuadreDinero,
-        dineroFaltante,
-        dineroSobrante,
-        facturasRutaIds: facturasDelDespacho.map((factura) => factura.id),
-        totalFacturasRuta: resumenFacturado.facturas,
-        valorFacturadoRuta: resumenFacturado.valor,
-        abonosDeudaAnterior: resumenFacturado.abonos,
-        pagosProductosHoy: resumenFacturado.pagosHoy,
-        fiadoRuta: resumenFacturado.fiado,
-        auditoriaEstado: auditoria.estado,
-        auditoriaAlertas: auditoria.alertas,
-        diferenciasProducto: auditoria.diferenciasProducto,
-        observaciones: cash.observaciones.trim(),
-        estado: "recibido",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      cleanItems.forEach((item) => {
-        if (item.devuelto > 0) {
-          batch.update(doc(db, "productos", item.productoId), {
-            stock: increment(item.devuelto),
-            updatedAt: serverTimestamp(),
-          });
-
-          batch.set(doc(collection(db, "kardex")), {
-            productoId: item.productoId,
-            productoNombre: item.nombre,
-            tipo: "entrada_devolucion_ruta",
-            cantidad: item.devuelto,
-            costo: Number(item.costo) || 0,
-            referenciaId: recepcionRef.id,
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch(
+        `/api/admin/recepciones?empresaId=${encodeURIComponent(getCurrentEmpresaId())}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
             despachoId: despacho.id,
-            ruta: despacho.ruta || "",
-            diaRuta: despacho.diaRuta || "",
-            fecha: today,
-            createdAt: serverTimestamp(),
-          });
+            items: items.map((item) => ({
+              productoId: item.productoId,
+              devuelto: number(item.devuelto),
+            })),
+            cash,
+            confirmarAlertas: auditoria.alertas.length > 0,
+          }),
         }
+      );
+      const result = await response.json().catch(() => ({}));
 
-        if (item.faltante > 0) {
-          batch.set(doc(collection(db, "kardex")), {
-            productoId: item.productoId,
-            productoNombre: item.nombre,
-            tipo: "alerta_faltante_ruta",
-            cantidad: item.faltante,
-            costo: Number(item.costo) || 0,
-            subtotal: item.costoFaltante,
-            afectaStock: false,
-            referenciaId: recepcionRef.id,
-            despachoId: despacho.id,
-            ruta: despacho.ruta || "",
-            diaRuta: despacho.diaRuta || "",
-            fecha: today,
-            observacion: "Faltante detectado en recepcion. No descuenta stock de nuevo.",
-            createdAt: serverTimestamp(),
-          });
-        }
-      });
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo guardar la recepcion.");
+      }
 
-      batch.update(doc(db, "despachos", despacho.id), {
-        estado: "recibido",
-        recepcionId: recepcionRef.id,
-        updatedAt: serverTimestamp(),
-      });
-
-      await batch.commit();
       setSelectedId("");
       setItems([]);
       setCash(emptyCash);
       await cargarDatos();
     } catch (error) {
       console.error("Error guardando recepcion:", error);
-      alert("No se pudo guardar la recepcion.");
+      alert(error.message || "No se pudo guardar la recepcion.");
     } finally {
       setSaving(false);
     }
@@ -952,6 +831,7 @@ export default function RecepcionesAdminPage() {
                   valor: 0,
                 };
                 const diferencia = dejado - facturado.cantidad;
+                const devueltoInvalido = devuelto > cantidad;
 
                 return (
                   <tr key={item.productoId}>

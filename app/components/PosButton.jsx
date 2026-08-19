@@ -1,8 +1,14 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { ReceiptText } from "lucide-react";
+import { isOperationalPath } from "@/lib/routeZones";
 
 export default function PosButton() {
+  const pathname = usePathname();
+
+  if (isOperationalPath(pathname)) return null;
+
   function activarPOS() {
     document.documentElement.requestFullscreen();
   }

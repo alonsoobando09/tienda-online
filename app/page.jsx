@@ -20,8 +20,8 @@ export default function HomePage() {
         <div className="home-hero-media" />
         <div className="home-hero-overlay" />
 
-        <Link className="home-admin-link" href="/login">
-          Admin
+        <Link className="home-admin-link" href="/app">
+          App operativa
         </Link>
 
         <div className="home-hero-content">

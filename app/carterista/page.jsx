@@ -9,8 +9,10 @@ import {
   collection,
   doc,
   getDocs,
+  query,
   serverTimestamp,
   updateDoc,
+  where,
   writeBatch,
 } from "firebase/firestore";
 import {
@@ -22,7 +24,7 @@ import {
   sortClientesByRoute,
 } from "@/lib/operacion";
 import { getUserProfile } from "@/lib/authRoles";
-import { filterByEmpresa, withEmpresaId } from "@/lib/tenant";
+import { filterByEmpresa, getProfileEmpresaId, withEmpresaId } from "@/lib/tenant";
 import {
   LocateFixed,
   MessageCircle,
@@ -130,10 +132,14 @@ function CarteristaContent() {
 
       if (!nextProfile.isAdmin && nextProfile.uid) {
         const today = new Date().toISOString().slice(0, 10);
-        const snap = await getDocs(collection(db, "autorizacionesRuta"));
+        const snap = await getDocs(
+          query(
+            collection(db, "autorizacionesRuta"),
+            where("empresaId", "==", getProfileEmpresaId(nextProfile))
+          )
+        );
         const activeAuthorization = snap.docs
           .map((docu) => ({ id: docu.id, ...docu.data() }))
-          .filter((item) => filterByEmpresa([item], nextProfile).length > 0)
           .find(
             (item) =>
               item.uid === nextProfile.uid &&

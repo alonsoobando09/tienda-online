@@ -4,17 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
 import { useEmpleados } from "@/lib/useEmpleados";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import {
   collection,
-  deleteDoc,
-  doc,
   getDocs,
-  serverTimestamp,
-  writeBatch,
+  query,
+  where,
 } from "firebase/firestore";
 import { diasRuta, getDiaLabel, rutasBase } from "@/lib/operacion";
-import { DEFAULT_EMPRESA_ID, normalizeEmpresaId } from "@/lib/tenant";
+import { getCurrentEmpresaId } from "@/lib/tenant";
 import { Save, Search, ShieldCheck, Trash2 } from "lucide-react";
 
 const emptyForm = {
@@ -47,7 +45,12 @@ export default function AutorizacionesPage() {
 
   async function cargarAutorizaciones() {
     setLoading(true);
-    const snap = await getDocs(collection(db, "autorizacionesRuta"));
+    const snap = await getDocs(
+      query(
+        collection(db, "autorizacionesRuta"),
+        where("empresaId", "==", getCurrentEmpresaId())
+      )
+    );
     setAutorizaciones(
       snap.docs
         .map((docu) => ({ id: docu.id, ...docu.data() }))
@@ -135,84 +138,88 @@ export default function AutorizacionesPage() {
     setSaving(true);
 
     try {
-      const batch = writeBatch(db);
-      const autorizacionRef = doc(collection(db, "autorizacionesRuta"));
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch(
+        `/api/admin/autorizaciones?empresaId=${encodeURIComponent(getCurrentEmpresaId())}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(form),
+        }
+      );
+      const result = await response.json().catch(() => ({}));
 
-      autorizaciones
-        .filter(
-          (item) =>
-            item.uid === empleado.uid &&
-            item.fecha === form.fecha &&
-            item.estado === "activa"
-        )
-        .forEach((item) => {
-          batch.update(doc(db, "autorizacionesRuta", item.id), {
-            estado: "reemplazada",
-            reemplazadaPor: autorizacionRef.id,
-            updatedAt: serverTimestamp(),
-          });
-        });
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo guardar la autorizacion.");
+      }
 
-      batch.set(autorizacionRef, {
-        empleadoId: empleado.id,
-        uid: empleado.uid,
-        empresaId: normalizeEmpresaId(empleado.empresaId || DEFAULT_EMPRESA_ID),
-        empleadoNombre: empleado.nombre || "",
-        empleadoRol: empleado.rol || "",
-        fecha: form.fecha,
-        diaRuta: form.diaRuta,
-        ruta: form.ruta,
-        motivo: form.motivo.trim(),
-        estado: form.estado,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      await batch.commit();
       setForm(emptyForm);
       await cargarAutorizaciones();
     } catch (error) {
       console.error("Error guardando autorizacion:", error);
-      alert("No se pudo guardar la autorizacion.");
+      alert(error.message || "No se pudo guardar la autorizacion.");
     } finally {
       setSaving(false);
     }
   }
 
   async function cambiarEstado(autorizacion, estado) {
-    const batch = writeBatch(db);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch(
+        `/api/admin/autorizaciones?empresaId=${encodeURIComponent(getCurrentEmpresaId())}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ id: autorizacion.id, estado }),
+        }
+      );
+      const result = await response.json().catch(() => ({}));
 
-    if (estado === "activa") {
-      autorizaciones
-        .filter(
-          (item) =>
-            item.id !== autorizacion.id &&
-            item.uid === autorizacion.uid &&
-            item.fecha === autorizacion.fecha &&
-            item.estado === "activa"
-        )
-        .forEach((item) => {
-          batch.update(doc(db, "autorizacionesRuta", item.id), {
-            estado: "reemplazada",
-            reemplazadaPor: autorizacion.id,
-            updatedAt: serverTimestamp(),
-          });
-        });
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo cambiar la autorizacion.");
+      }
+
+      await cargarAutorizaciones();
+    } catch (error) {
+      console.error("Error cambiando autorizacion:", error);
+      alert(error.message || "No se pudo cambiar la autorizacion.");
     }
-
-    batch.update(doc(db, "autorizacionesRuta", autorizacion.id), {
-      estado,
-      updatedAt: serverTimestamp(),
-    });
-
-    await batch.commit();
-    await cargarAutorizaciones();
   }
 
   async function eliminarAutorizacion(id) {
     if (!confirm("Eliminar esta autorizacion?")) return;
-    await deleteDoc(doc(db, "autorizacionesRuta", id));
-    await cargarAutorizaciones();
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch(
+        `/api/admin/autorizaciones?empresaId=${encodeURIComponent(getCurrentEmpresaId())}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ id }),
+        }
+      );
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo eliminar la autorizacion.");
+      }
+
+      await cargarAutorizaciones();
+    } catch (error) {
+      console.error("Error eliminando autorizacion:", error);
+      alert(error.message || "No se pudo eliminar la autorizacion.");
+    }
   }
 
   return (

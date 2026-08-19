@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#062819"/>
+  <rect x="88" y="116" width="336" height="280" rx="44" fill="#f4f0e6"/>
+  <path d="M120 206h272" stroke="#0b6b3a" stroke-width="32" stroke-linecap="round"/>
+  <path d="M156 276h200" stroke="#d8ae4f" stroke-width="32" stroke-linecap="round"/>
+  <path d="M180 342h152" stroke="#062819" stroke-width="28" stroke-linecap="round"/>
+  <circle cx="152" cy="116" r="34" fill="#0b6b3a"/>
+  <circle cx="360" cy="396" r="42" fill="#0b6b3a"/>
+  <text x="256" y="184" text-anchor="middle" font-family="Arial, sans-serif" font-size="82" font-weight="800" fill="#062819">PC</text>
+</svg>
