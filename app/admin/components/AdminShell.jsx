@@ -7,6 +7,7 @@ import {
   BarChart3,
   Bug,
   Boxes,
+  Building2,
   Calculator,
   ClipboardCheck,
   ClipboardList,
@@ -30,6 +31,7 @@ import { canAccessRole } from "@/lib/permissions";
 import SignOutButton from "@/app/components/SignOutButton";
 
 const navItems = [
+  { href: "/admin/empresas", label: "Empresas", icon: Building2, roles: ["superadmin"] },
   { href: "/admin", label: "Dashboard", icon: BarChart3, roles: ["admin"] },
   { href: "/admin/productos", label: "Productos", icon: Package, roles: ["admin"] },
   { href: "/admin/proveedores", label: "Proveedores", icon: Truck, roles: ["admin"] },

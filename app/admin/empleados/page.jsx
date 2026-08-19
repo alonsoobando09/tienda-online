@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
 import { useEmpleados } from "@/lib/useEmpleados";
@@ -60,7 +60,10 @@ function getDineroSobrante(item) {
 }
 
 export default function EmpleadosPage() {
-  const { empleados, loading } = useEmpleados();
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
+  const [empresas, setEmpresas] = useState([]);
+  const [selectedEmpresaId, setSelectedEmpresaId] = useState(() => getCurrentEmpresaId());
+  const { empleados, loading } = useEmpleados(selectedEmpresaId);
   const [liquidaciones, setLiquidaciones] = useState([]);
   const [gastosRuta, setGastosRuta] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -69,8 +72,8 @@ export default function EmpleadosPage() {
   const [roleFilter, setRoleFilter] = useState("todos");
   const [saving, setSaving] = useState(false);
 
-  async function cargarResumenOperativo() {
-    const empresaId = getCurrentEmpresaId();
+  const cargarResumenOperativo = useCallback(async () => {
+    const empresaId = selectedEmpresaId;
     const [liquidacionesSnap, gastosSnap] = await Promise.all([
       getDocs(query(collection(db, "liquidaciones"), where("empresaId", "==", empresaId))),
       getDocs(query(collection(db, "gastosRuta"), where("empresaId", "==", empresaId))),
@@ -80,15 +83,41 @@ export default function EmpleadosPage() {
       liquidacionesSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() }))
     );
     setGastosRuta(gastosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })));
-  }
+  }, [selectedEmpresaId]);
 
   useEffect(() => {
+    setIsSuperadmin(localStorage.getItem("userRole") === "superadmin");
+
     const timer = setTimeout(() => {
       cargarResumenOperativo();
     }, 0);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [cargarResumenOperativo, selectedEmpresaId]);
+
+  async function cargarEmpresas() {
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
+
+      const response = await fetch("/api/admin/empresas", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result = await response.json();
+
+      if (response.ok && Array.isArray(result)) {
+        setEmpresas(result);
+      }
+    } catch (error) {
+      console.error("Error cargando empresas:", error);
+    }
+  }
+
+  useEffect(() => {
+    if (isSuperadmin) {
+      cargarEmpresas();
+    }
+  }, [isSuperadmin]);
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -136,14 +165,17 @@ export default function EmpleadosPage() {
         throw new Error("Sesion no disponible. Ingresa nuevamente.");
       }
 
-      const response = await fetch("/api/admin/empleados", {
-        method: editingId ? "PUT" : "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      const response = await fetch(
+        `/api/admin/empleados?empresaId=${encodeURIComponent(selectedEmpresaId)}`,
+        {
+          method: editingId ? "PUT" : "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
       const result = await response.json();
 
       if (!response.ok) {
@@ -168,14 +200,17 @@ export default function EmpleadosPage() {
         throw new Error("Sesion no disponible. Ingresa nuevamente.");
       }
 
-      const response = await fetch("/api/admin/empleados", {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id: empleado.id }),
-      });
+      const response = await fetch(
+        `/api/admin/empleados?empresaId=${encodeURIComponent(selectedEmpresaId)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ id: empleado.id }),
+        }
+      );
       const result = await response.json();
 
       if (!response.ok) {
@@ -369,6 +404,41 @@ export default function EmpleadosPage() {
           </a>
         }
       >
+        {isSuperadmin && (
+          <section className="admin-card admin-accent-card">
+            <div className="admin-section-title">
+              <div>
+                <h2>Empresa operativa</h2>
+                <p>
+                  Los empleados creados aqui quedan asignados solo a esta empresa.
+                </p>
+              </div>
+            </div>
+
+            <div className="admin-form">
+              <label>
+                Empresa
+                <select
+                  value={selectedEmpresaId}
+                  onChange={(event) => {
+                    setSelectedEmpresaId(event.target.value);
+                    limpiarFormulario();
+                  }}
+                >
+                  {empresas.map((empresa) => (
+                    <option key={empresa.empresaId || empresa.id} value={empresa.empresaId || empresa.id}>
+                      {empresa.nombre} ({empresa.empresaId || empresa.id})
+                    </option>
+                  ))}
+                  {!empresas.some((empresa) => (empresa.empresaId || empresa.id) === selectedEmpresaId) && (
+                    <option value={selectedEmpresaId}>{selectedEmpresaId}</option>
+                  )}
+                </select>
+              </label>
+            </div>
+          </section>
+        )}
+
         <section className="admin-grid admin-kpis">
           <article className="admin-card admin-stat-green">
             <h3>Activos</h3>
