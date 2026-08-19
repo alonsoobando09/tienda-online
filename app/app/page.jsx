@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import PwaInstallCard from "@/app/components/PwaInstallCard";
 import RoleGuard from "@/app/components/RoleGuard";
+import SignOutButton from "@/app/components/SignOutButton";
 import { ROLES } from "@/lib/permissions";
 
 const modules = [
@@ -78,6 +79,7 @@ export default function OperationalAppPage() {
               <Link className="home-button whatsapp" href="/carterista">
                 Entrar carterista
               </Link>
+              <SignOutButton className="pc-signout-button app" label="Cerrar sesion" />
             </div>
             <PwaInstallCard />
           </div>

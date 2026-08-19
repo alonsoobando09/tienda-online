@@ -106,6 +106,25 @@ body {
   justify-content: flex-start;
 }
 
+.pc-signout-button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  color: #7a1f17;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 900;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 16px;
+}
+
+.pc-signout-button.app {
+  background: #fffaf0;
+  color: #7a1f17;
+}
+
 .pc-app-device {
   aspect-ratio: 0.72;
   background:
@@ -694,6 +713,11 @@ button:hover {
 .route-location-button:disabled {
   opacity: .62;
   cursor: not-allowed;
+}
+
+.route-location-button.danger {
+  background: #fff1ee;
+  color: #9b1c13;
 }
 
 .route-grid {
@@ -1848,6 +1872,12 @@ button:hover {
   color: #d6b160;
   border: 1px solid rgba(214,177,96,.35);
   font-weight: 700;
+}
+
+.admin-store-link.as-button {
+  background: transparent;
+  cursor: pointer;
+  width: calc(100% - 20px);
 }
 
 .admin-content {

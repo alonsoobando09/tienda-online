@@ -12,7 +12,6 @@ import {
   ClipboardList,
   CreditCard,
   FileText,
-  Home,
   HandCoins,
   History,
   Map,
@@ -28,6 +27,7 @@ import {
   Users,
 } from "lucide-react";
 import { canAccessRole } from "@/lib/permissions";
+import SignOutButton from "@/app/components/SignOutButton";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: BarChart3, roles: ["admin"] },
@@ -116,10 +116,7 @@ export default function AdminShell({ title, subtitle, actions, children }) {
           })}
         </nav>
 
-        <Link className="admin-store-link" href="/">
-          <Home size={17} />
-          Ver tienda
-        </Link>
+        <SignOutButton className="admin-store-link as-button" label="Cerrar sesion" />
       </aside>
 
       <section className="admin-content">

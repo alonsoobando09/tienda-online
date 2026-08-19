@@ -25,6 +25,7 @@ import {
 } from "@/lib/operacion";
 import { getUserProfile } from "@/lib/authRoles";
 import { filterByEmpresa, getProfileEmpresaId, withEmpresaId } from "@/lib/tenant";
+import SignOutButton from "@/app/components/SignOutButton";
 import {
   LocateFixed,
   MessageCircle,
@@ -998,6 +999,7 @@ function CarteristaContent() {
               <LocateFixed size={17} />
               {sendingLocation ? "Enviando..." : "Ubicacion"}
             </button>
+            <SignOutButton className="route-location-button danger" label="Salir" />
           </div>
         )}
       </section>
