@@ -10,30 +10,28 @@ service cloud.firestore {
       return signedIn() &&
         (
           request.auth.token.email == "alriver1995zit@gmail.com" ||
-          request.auth.token.admin == true ||
           request.auth.token.superadmin == true
         );
     }
 
-    function userDoc() {
-      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    function userDocPath() {
+      return /databases/$(database)/documents/usuarios/$(request.auth.uid);
     }
 
     function hasUserProfile() {
-      return signedIn() &&
-        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+      return signedIn() && exists(userDocPath());
     }
 
-    function userEmpresaId() {
-      return isOwnerAdmin()
-        ? "proveedor-central"
-        : userDoc().data.empresaId;
+    function userDoc() {
+      return get(userDocPath());
     }
 
     function userRole() {
-      return isOwnerAdmin()
-        ? "superadmin"
-        : userDoc().data.rol;
+      return isOwnerAdmin() ? "superadmin" : userDoc().data.rol;
+    }
+
+    function userEmpresaId() {
+      return isOwnerAdmin() ? "proveedor-central" : userDoc().data.empresaId;
     }
 
     function activeUser() {
@@ -42,6 +40,14 @@ service cloud.firestore {
           hasUserProfile() &&
           !(userDoc().data.estado in ["inactivo", "bloqueado"])
         );
+    }
+
+    function isSuperadmin() {
+      return activeUser() && userRole() == "superadmin";
+    }
+
+    function roleIn(roles) {
+      return activeUser() && (isSuperadmin() || userRole() in roles);
     }
 
     function docEmpresaId(data) {
@@ -53,8 +59,7 @@ service cloud.firestore {
     }
 
     function createSameEmpresa() {
-      return activeUser() &&
-        request.resource.data.empresaId == userEmpresaId();
+      return activeUser() && request.resource.data.empresaId == userEmpresaId();
     }
 
     function updateSameEmpresa() {
@@ -62,31 +67,183 @@ service cloud.firestore {
         request.resource.data.empresaId == docEmpresaId(resource.data);
     }
 
-    function roleIn(roles) {
-      return activeUser() && (userRole() == "superadmin" || userRole() in roles);
+    function createOwnEmpresaOrSuperadmin() {
+      return isSuperadmin() ||
+        (activeUser() && request.resource.data.empresaId == userEmpresaId());
     }
 
-    match /usuarios/{uid} {
-      allow read: if isOwnerAdmin() || request.auth.uid == uid || roleIn(["admin"]);
-      allow create, update: if roleIn(["admin"]);
-      allow delete: if roleIn(["admin"]);
+    function updateOwnEmpresaOrSuperadmin() {
+      return isSuperadmin() ||
+        (
+          sameEmpresa(resource.data) &&
+          request.resource.data.empresaId == docEmpresaId(resource.data)
+        );
+    }
+
+    function hasTenantOnCreate() {
+      return request.resource.data.empresaId is string &&
+        request.resource.data.empresaId.size() > 0;
     }
 
     match /empresas/{empresaId} {
-      allow read: if activeUser() && (userRole() == "superadmin" || empresaId == userEmpresaId());
-      allow write: if isOwnerAdmin();
+      allow read: if isSuperadmin() || (activeUser() && empresaId == userEmpresaId());
+      allow create, update: if isSuperadmin() &&
+        request.resource.data.empresaId == empresaId;
+      allow delete: if isSuperadmin();
+    }
+
+    match /usuarios/{uid} {
+      allow read: if isSuperadmin() ||
+        (signedIn() && request.auth.uid == uid) ||
+        (roleIn(["admin"]) && sameEmpresa(resource.data));
+
+      allow create: if roleIn(["admin"]) &&
+        hasTenantOnCreate() &&
+        createOwnEmpresaOrSuperadmin() &&
+        request.resource.data.rol != "superadmin";
+
+      allow update: if roleIn(["admin"]) &&
+        updateOwnEmpresaOrSuperadmin() &&
+        request.resource.data.rol != "superadmin";
+
+      allow delete: if roleIn(["admin"]) && (isSuperadmin() || sameEmpresa(resource.data));
+    }
+
+    match /empleados/{docId} {
+      allow read: if roleIn(["admin", "bodega"]) && sameEmpresa(resource.data);
+      allow create: if roleIn(["admin"]) && createOwnEmpresaOrSuperadmin();
+      allow update: if roleIn(["admin"]) && updateOwnEmpresaOrSuperadmin();
+      allow delete: if roleIn(["admin"]) && (isSuperadmin() || sameEmpresa(resource.data));
+    }
+
+    match /productos/{docId} {
+      allow read: if sameEmpresa(resource.data);
+      allow create: if roleIn(["admin", "bodega"]) && createSameEmpresa();
+      allow update: if roleIn(["admin", "bodega"]) && updateSameEmpresa();
+      allow delete: if roleIn(["admin"]) && sameEmpresa(resource.data);
+    }
+
+    match /clientes/{docId} {
+      allow read: if sameEmpresa(resource.data);
+      allow create: if roleIn(["admin", "carterista"]) && createSameEmpresa();
+      allow update: if roleIn(["admin", "carterista"]) && updateSameEmpresa();
+      allow delete: if roleIn(["admin"]) && sameEmpresa(resource.data);
+    }
+
+    match /proveedores/{docId} {
+      allow read: if roleIn(["admin", "bodega"]) && sameEmpresa(resource.data);
+      allow create: if roleIn(["admin", "bodega"]) && createSameEmpresa();
+      allow update: if roleIn(["admin", "bodega"]) && updateSameEmpresa();
+      allow delete: if roleIn(["admin"]) && sameEmpresa(resource.data);
+    }
+
+    match /compras/{docId} {
+      allow read: if roleIn(["admin", "bodega"]) && sameEmpresa(resource.data);
+      allow create: if roleIn(["admin", "bodega"]) && createSameEmpresa();
+      allow update, delete: if roleIn(["admin"]) && updateSameEmpresa();
+    }
+
+    match /cuentasPagar/{docId} {
+      allow read: if roleIn(["admin", "bodega"]) && sameEmpresa(resource.data);
+      allow create: if roleIn(["admin", "bodega"]) && createSameEmpresa();
+      allow update: if roleIn(["admin", "bodega"]) && updateSameEmpresa();
+      allow delete: if roleIn(["admin"]) && sameEmpresa(resource.data);
+    }
+
+    match /despachos/{docId} {
+      allow read: if roleIn(["admin", "bodega", "carterista", "ayudante"]) && sameEmpresa(resource.data);
+      allow create: if roleIn(["admin", "bodega"]) && createSameEmpresa();
+      allow update: if roleIn(["admin", "bodega"]) && updateSameEmpresa();
+      allow delete: if roleIn(["admin"]) && sameEmpresa(resource.data);
+    }
+
+    match /recepciones/{docId} {
+      allow read: if roleIn(["admin", "bodega"]) && sameEmpresa(resource.data);
+      allow create: if roleIn(["admin", "bodega"]) && createSameEmpresa();
+      allow update: if roleIn(["admin", "bodega"]) && updateSameEmpresa();
+      allow delete: if roleIn(["admin"]) && sameEmpresa(resource.data);
+    }
+
+    match /liquidaciones/{docId} {
+      allow read: if roleIn(["admin"]) && sameEmpresa(resource.data);
+      allow create: if roleIn(["admin"]) && createSameEmpresa();
+      allow update: if roleIn(["admin"]) && updateSameEmpresa();
+      allow delete: if roleIn(["admin"]) && sameEmpresa(resource.data);
+    }
+
+    match /facturasRuta/{docId} {
+      allow read: if roleIn(["admin", "bodega", "carterista", "ayudante"]) && sameEmpresa(resource.data);
+      allow create: if roleIn(["admin", "carterista"]) && createSameEmpresa();
+      allow update: if roleIn(["admin", "carterista"]) && updateSameEmpresa();
+      allow delete: if roleIn(["admin"]) && sameEmpresa(resource.data);
+    }
+
+    match /movimientosCartera/{docId} {
+      allow read: if roleIn(["admin", "carterista"]) && sameEmpresa(resource.data);
+      allow create: if roleIn(["admin", "carterista"]) && createSameEmpresa();
+      allow update, delete: if roleIn(["admin"]) && updateSameEmpresa();
+    }
+
+    match /gastosRuta/{docId} {
+      allow read: if roleIn(["admin", "bodega", "carterista", "ayudante"]) && sameEmpresa(resource.data);
+      allow create: if roleIn(["admin", "carterista", "ayudante"]) && createSameEmpresa();
+      allow update: if roleIn(["admin", "carterista", "ayudante"]) && updateSameEmpresa();
+      allow delete: if roleIn(["admin"]) && sameEmpresa(resource.data);
+    }
+
+    match /gestionesRuta/{docId} {
+      allow read: if roleIn(["admin", "bodega", "carterista", "ayudante"]) && sameEmpresa(resource.data);
+      allow create: if roleIn(["admin", "carterista", "ayudante"]) && createSameEmpresa();
+      allow update: if roleIn(["admin", "carterista", "ayudante"]) && updateSameEmpresa();
+      allow delete: if roleIn(["admin"]) && sameEmpresa(resource.data);
+    }
+
+    match /ubicacionesRuta/{docId} {
+      allow read: if roleIn(["admin"]) && sameEmpresa(resource.data);
+      allow create: if roleIn(["carterista", "ayudante"]) && createSameEmpresa();
+      allow update, delete: if false;
+    }
+
+    match /kardex/{docId} {
+      allow read: if roleIn(["admin", "bodega"]) && sameEmpresa(resource.data);
+      allow create: if roleIn(["admin", "bodega"]) && createSameEmpresa();
+      allow update, delete: if false;
+    }
+
+    match /autorizacionesRuta/{docId} {
+      allow read: if roleIn(["admin", "carterista", "ayudante"]) && sameEmpresa(resource.data);
+      allow create, update, delete: if roleIn(["admin"]) && createSameEmpresa();
+    }
+
+    match /facturas/{docId} {
+      allow read: if sameEmpresa(resource.data);
+      allow create: if createSameEmpresa();
+      allow update, delete: if roleIn(["admin"]) && updateSameEmpresa();
+    }
+
+    match /ventas/{docId} {
+      allow read: if roleIn(["admin"]) && sameEmpresa(resource.data);
+      allow create: if hasTenantOnCreate();
+      allow update, delete: if roleIn(["admin"]) && updateSameEmpresa();
+    }
+
+    match /erroresSistema/{docId} {
+      allow read: if roleIn(["admin"]) && sameEmpresa(resource.data);
+      allow create: if hasTenantOnCreate();
+      allow update: if roleIn(["admin"]) && updateSameEmpresa();
+      allow delete: if false;
     }
 
     match /auditoria/{docId} {
       allow read: if roleIn(["admin"]) && sameEmpresa(resource.data);
-      allow create: if createSameEmpresa();
+      allow create: if false;
       allow update, delete: if false;
     }
 
     match /{collectionId}/{docId} {
       allow read: if sameEmpresa(resource.data);
-      allow create: if createSameEmpresa();
-      allow update: if updateSameEmpresa();
+      allow create: if roleIn(["admin"]) && createSameEmpresa();
+      allow update: if roleIn(["admin"]) && updateSameEmpresa();
       allow delete: if roleIn(["admin"]) && sameEmpresa(resource.data);
     }
   }
