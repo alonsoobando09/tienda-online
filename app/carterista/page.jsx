@@ -8,6 +8,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   query,
   serverTimestamp,
@@ -25,6 +26,7 @@ import {
 } from "@/lib/operacion";
 import { getUserProfile } from "@/lib/authRoles";
 import { filterByEmpresa, getProfileEmpresaId, withEmpresaId } from "@/lib/tenant";
+import { buildRouteClosureId, isRouteClosed } from "@/lib/routeClosure";
 import SignOutButton from "@/app/components/SignOutButton";
 import {
   LocateFixed,
@@ -121,6 +123,7 @@ function CarteristaContent() {
   const [pago, setPago] = useState(emptyPago);
   const [ultimaFactura, setUltimaFactura] = useState(null);
   const [autorizacion, setAutorizacion] = useState(null);
+  const [cierreRuta, setCierreRuta] = useState(null);
   const [locationMessage, setLocationMessage] = useState("");
   const [sendingLocation, setSendingLocation] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -183,13 +186,32 @@ function CarteristaContent() {
         ? profile?.ruta || ""
         : "";
   const canWorkToday = Boolean(assignedDay && assignedRoute);
+  const rutaCerrada = isRouteClosed(cierreRuta);
 
   const cargarDatos = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
-    const [clientesSnap, productosSnap, gastosSnap] = await Promise.all([
+    const empresaId = getProfileEmpresaId(profile);
+    const cierreRutaPromise =
+      empresaId && assignedDay && assignedRoute
+        ? getDoc(
+            doc(
+              db,
+              "cierresRuta",
+              buildRouteClosureId({
+                empresaId,
+                fecha: today,
+                diaRuta: assignedDay,
+                ruta: assignedRoute,
+              })
+            )
+          )
+        : Promise.resolve(null);
+
+    const [clientesSnap, productosSnap, gastosSnap, cierreRutaSnap] = await Promise.all([
       getDocs(collection(db, "clientes")),
       getDocs(collection(db, "productos")),
       getDocs(collection(db, "gastosRuta")),
+      cierreRutaPromise,
     ]);
     setClientes(
       sortClientesByRoute(
@@ -211,8 +233,13 @@ function CarteristaContent() {
         profile
       )
     );
+    setCierreRuta(
+      cierreRutaSnap?.exists()
+        ? { id: cierreRutaSnap.id, ...cierreRutaSnap.data() }
+        : null
+    );
     setLoading(false);
-  }, [profile]);
+  }, [assignedDay, assignedRoute, profile, today]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -408,11 +435,26 @@ function CarteristaContent() {
     setGastoForm((current) => ({ ...current, [field]: value }));
   }
 
+  function validarRutaOperable() {
+    if (!canWorkToday) {
+      alert("Hoy no hay ruta activa. Pide autorizacion al administrador.");
+      return false;
+    }
+
+    if (rutaCerrada) {
+      alert(
+        "Esta ruta ya fue liquidada y cerrada. No se pueden agregar ventas, gastos ni cambios."
+      );
+      return false;
+    }
+
+    return true;
+  }
+
   async function registrarGastoRuta(e) {
     e.preventDefault();
 
-    if (!canWorkToday) {
-      alert("Hoy no hay ruta activa. Pide autorizacion al administrador.");
+    if (!validarRutaOperable()) {
       return;
     }
 
@@ -509,8 +551,7 @@ function CarteristaContent() {
 
   async function agregarCliente(e) {
     e.preventDefault();
-    if (!canWorkToday) {
-      alert("Hoy no hay ruta activa. Pide autorizacion al administrador.");
+    if (!validarRutaOperable()) {
       return;
     }
 
@@ -575,6 +616,8 @@ function CarteristaContent() {
   }
 
   async function solicitarBorrado(cliente) {
+    if (!validarRutaOperable()) return;
+
     if (!confirm(`Marcar ${cliente.nombre} para revision de borrado?`)) return;
 
     await updateDoc(doc(db, "clientes", cliente.id), {
@@ -587,6 +630,8 @@ function CarteristaContent() {
   }
 
   async function marcarVisita(cliente, estadoVisita) {
+    if (!validarRutaOperable()) return;
+
     const fecha = new Date().toISOString().slice(0, 10);
     const riesgoPerdida = estadoVisita === "riesgo_perdida";
     const clienteAtendido = estadoVisita === "visitado";
@@ -643,6 +688,7 @@ function CarteristaContent() {
         clienteId: cliente.id,
         clienteNombre: cliente.nombre || "",
         telefono: cliente.telefono || "",
+        fecha,
         diaRuta: assignedDay,
         ruta: assignedRoute,
         carteristaId: profile?.uid || "",
@@ -708,8 +754,7 @@ function CarteristaContent() {
       return;
     }
 
-    if (!canWorkToday) {
-      alert("Hoy no hay ruta activa. Pide autorizacion al administrador.");
+    if (!validarRutaOperable()) {
       return;
     }
 
@@ -781,8 +826,7 @@ function CarteristaContent() {
       alert("Agrega productos o registra un abono.");
       return;
     }
-    if (!canWorkToday) {
-      alert("Hoy no hay ruta activa. Pide autorizacion al administrador.");
+    if (!validarRutaOperable()) {
       return;
     }
     if (bloqueosVenta.length > 0) {
@@ -845,6 +889,7 @@ function CarteristaContent() {
           clienteId: selectedCliente.id,
           clienteNombre: selectedCliente.nombre || "",
           telefono: selectedCliente.telefono || "",
+          fecha: facturaPayload.fecha,
           diaRuta: assignedDay,
           ruta: assignedRoute,
           facturaRutaId: facturaRef.id,
@@ -891,6 +936,7 @@ function CarteristaContent() {
           clienteId: selectedCliente.id,
           clienteNombre: selectedCliente.nombre || "",
           telefono: selectedCliente.telefono || "",
+          fecha: facturaPayload.fecha,
           diaRuta: assignedDay,
           ruta: assignedRoute,
           facturaRutaId: facturaRef.id,
@@ -1022,6 +1068,13 @@ function CarteristaContent() {
         </section>
       )}
 
+      {rutaCerrada && (
+        <section className="route-card route-alert">
+          Ruta liquidada y cerrada. Los datos quedan protegidos para auditoria;
+          cualquier ajuste debe hacerlo el administrador desde la liquidacion.
+        </section>
+      )}
+
       <section className="route-grid">
         <form className="route-card route-form" onSubmit={agregarCliente}>
           <h2>Agregar cliente del dia</h2>
@@ -1078,9 +1131,9 @@ function CarteristaContent() {
               </option>
             ))}
           </select>
-          <button disabled={saving || !canWorkToday} type="submit">
+          <button disabled={saving || !canWorkToday || rutaCerrada} type="submit">
             <Plus size={18} />
-            {saving ? "Guardando..." : "Agregar cliente"}
+            {rutaCerrada ? "Ruta cerrada" : saving ? "Guardando..." : "Agregar cliente"}
           </button>
         </form>
 
@@ -1174,6 +1227,7 @@ function CarteristaContent() {
                     <button
                       className="route-action-ok"
                       aria-label="Cliente encontrado y atendido"
+                      disabled={rutaCerrada}
                       onClick={() => marcarVisita(cliente, "visitado")}
                       title="Encontrado y atendido"
                       type="button"
@@ -1183,6 +1237,7 @@ function CarteristaContent() {
                     <button
                       className="route-action-muted"
                       aria-label="Cliente no disponible temporalmente"
+                      disabled={rutaCerrada}
                       onClick={() => marcarVisita(cliente, "no_encontrado")}
                       title="No esta: casa, descanso, vacaciones"
                       type="button"
@@ -1192,6 +1247,7 @@ function CarteristaContent() {
                     <button
                       className="route-action-risk"
                       aria-label="Cliente en riesgo de perder cartera"
+                      disabled={rutaCerrada}
                       onClick={() => marcarVisita(cliente, "riesgo_perdida")}
                       title="Riesgo de perder la plata"
                       type="button"
@@ -1201,6 +1257,7 @@ function CarteristaContent() {
                   </div>
                   <button
                     aria-label="Solicitar revision para borrar cliente"
+                    disabled={rutaCerrada}
                     onClick={() => solicitarBorrado(cliente)}
                     title="Solicitar revision para borrar"
                     type="button"
@@ -1254,9 +1311,9 @@ function CarteristaContent() {
               value={gastoForm.descripcion}
               onChange={(e) => updateGasto("descripcion", e.target.value)}
             />
-            <button disabled={saving || !canWorkToday} type="submit">
+            <button disabled={saving || !canWorkToday || rutaCerrada} type="submit">
               <ReceiptText size={18} />
-              Registrar
+              {rutaCerrada ? "Ruta cerrada" : "Registrar"}
             </button>
           </form>
 
@@ -1352,6 +1409,7 @@ function CarteristaContent() {
                         <button
                           aria-label="Agregar con precio minimo"
                           className="green"
+                          disabled={rutaCerrada}
                           onClick={() => agregarProducto(producto, "minimo")}
                           title="Precio minimo"
                           type="button"
@@ -1359,6 +1417,7 @@ function CarteristaContent() {
                         <button
                           aria-label="Agregar con precio sugerido"
                           className="yellow"
+                          disabled={rutaCerrada}
                           onClick={() => agregarProducto(producto, "sugerido")}
                           title="Precio sugerido"
                           type="button"
@@ -1366,6 +1425,7 @@ function CarteristaContent() {
                         <button
                           aria-label="Agregar con precio maximo"
                           className="red"
+                          disabled={rutaCerrada}
                           onClick={() => agregarProducto(producto, "maximo")}
                           title="Precio maximo"
                           type="button"
@@ -1408,6 +1468,7 @@ function CarteristaContent() {
                                 : "red"
                           }
                           key={tipo}
+                          disabled={rutaCerrada}
                           onClick={() => cambiarPrecio(item, tipo)}
                           type="button"
                         />
@@ -1416,6 +1477,7 @@ function CarteristaContent() {
                   </div>
                   <input
                     min="1"
+                    disabled={rutaCerrada}
                     type="number"
                     value={item.cantidad}
                     onChange={(e) =>
@@ -1425,6 +1487,7 @@ function CarteristaContent() {
                   <input
                     min={item.minimo}
                     max={item.maximo}
+                    disabled={rutaCerrada}
                     type="number"
                     value={item.precio}
                     onChange={(e) =>
@@ -1432,7 +1495,11 @@ function CarteristaContent() {
                     }
                   />
                   <strong>{money((Number(item.precio) || 0) * (Number(item.cantidad) || 0))}</strong>
-                  <button onClick={() => eliminarProducto(item.productoId)} type="button">
+                  <button
+                    disabled={rutaCerrada}
+                    onClick={() => eliminarProducto(item.productoId)}
+                    type="button"
+                  >
                     <X size={16} />
                   </button>
                 </div>
@@ -1461,6 +1528,7 @@ function CarteristaContent() {
                   Abono deuda anterior
                   <input
                     type="number"
+                    disabled={rutaCerrada}
                     value={pago.abonoDeudaAnterior}
                     onChange={(e) => updatePago("abonoDeudaAnterior", e.target.value)}
                   />
@@ -1469,6 +1537,7 @@ function CarteristaContent() {
                   Pago productos hoy
                   <input
                     type="number"
+                    disabled={rutaCerrada}
                     value={pago.pagoProductosHoy}
                     onChange={(e) => updatePago("pagoProductosHoy", e.target.value)}
                   />
@@ -1477,6 +1546,7 @@ function CarteristaContent() {
                   Observaciones
                   <textarea
                     rows="2"
+                    disabled={rutaCerrada}
                     value={pago.observaciones}
                     onChange={(e) => updatePago("observaciones", e.target.value)}
                   />
@@ -1496,11 +1566,16 @@ function CarteristaContent() {
 
               <button
                 className="admin-button"
-                disabled={saving || !selectedCliente || bloqueosVenta.length > 0}
+                disabled={
+                  saving ||
+                  rutaCerrada ||
+                  !selectedCliente ||
+                  bloqueosVenta.length > 0
+                }
                 onClick={guardarFactura}
                 type="button"
               >
-                {saving ? "Guardando..." : "Guardar factura"}
+                {rutaCerrada ? "Ruta cerrada" : saving ? "Guardando..." : "Guardar factura"}
               </button>
             </div>
           </div>

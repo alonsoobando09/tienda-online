@@ -3,11 +3,19 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebaseAdmin";
 import { logAuditEvent } from "@/lib/audit";
 import { belongsToEmpresaId } from "@/lib/firestoreTenant";
+import { buildRouteClosureId, getRouteWorkDate } from "@/lib/routeClosure";
 import {
   authErrorResponse,
   getRequestEmpresaId,
   requirePermission,
 } from "@/lib/serverAuth";
+
+const ROUTE_CLOSE_COLLECTIONS = [
+  "facturasRuta",
+  "gastosRuta",
+  "gestionesRuta",
+  "movimientosCartera",
+];
 
 function number(value) {
   return Number(value) || 0;
@@ -18,15 +26,41 @@ function text(value) {
 }
 
 async function loadRouteDocs(db, collectionName, empresaId, recepcion) {
+  const routeDate = getRouteWorkDate(recepcion);
   const snapshot = await db
     .collection(collectionName)
     .where("empresaId", "==", empresaId)
-    .where("fecha", "==", recepcion.fechaRecepcion || "")
+    .where("fecha", "==", routeDate)
     .where("ruta", "==", recepcion.ruta || "")
     .where("diaRuta", "==", recepcion.diaRuta || "")
     .get();
 
-  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  return snapshot.docs.map((doc) => ({ id: doc.id, ref: doc.ref, ...doc.data() }));
+}
+
+async function closeRouteCollections(db, docsByCollection, payload) {
+  let batch = db.batch();
+  let pending = 0;
+
+  async function commitIfNeeded(force = false) {
+    if (pending > 0 && (force || pending >= 450)) {
+      await batch.commit();
+      batch = db.batch();
+      pending = 0;
+    }
+  }
+
+  for (const collectionName of ROUTE_CLOSE_COLLECTIONS) {
+    const docs = docsByCollection[collectionName] || [];
+
+    for (const item of docs) {
+      batch.update(item.ref || db.collection(collectionName).doc(item.id), payload);
+      pending += 1;
+      await commitIfNeeded();
+    }
+  }
+
+  await commitIfNeeded(true);
 }
 
 function summarizeGastos(gastos = []) {
@@ -132,7 +166,36 @@ export async function POST(request) {
       return NextResponse.json({ error: "Esta recepcion ya fue liquidada" }, { status: 409 });
     }
 
-    const gastosRuta = await loadRouteDocs(db, "gastosRuta", empresaId, recepcion);
+    const routeDate = getRouteWorkDate(recepcion);
+    const cierreRutaId = buildRouteClosureId({
+      empresaId,
+      fecha: routeDate,
+      diaRuta: recepcion.diaRuta || "",
+      ruta: recepcion.ruta || "",
+    });
+    const cierreRutaRef = db.collection("cierresRuta").doc(cierreRutaId);
+    const cierreRutaSnap = await cierreRutaRef.get();
+
+    if (cierreRutaSnap.exists && cierreRutaSnap.data()?.estado === "cerrado") {
+      return NextResponse.json(
+        { error: "Esta ruta ya fue cerrada y liquidada." },
+        { status: 409 }
+      );
+    }
+
+    const docsByCollection = {};
+    await Promise.all(
+      ROUTE_CLOSE_COLLECTIONS.map(async (collectionName) => {
+        docsByCollection[collectionName] = await loadRouteDocs(
+          db,
+          collectionName,
+          empresaId,
+          recepcion
+        );
+      })
+    );
+
+    const gastosRuta = docsByCollection.gastosRuta || [];
     const resumenGastos = summarizeGastos(gastosRuta);
     const productosFaltantes = (recepcion.items || []).filter(
       (item) => number(item.faltante) > 0
@@ -146,7 +209,8 @@ export async function POST(request) {
       empresaId,
       recepcionId: recepcion.id,
       despachoId: recepcion.despachoId || "",
-      fecha: recepcion.fechaRecepcion || "",
+      fecha: routeDate,
+      fechaRecepcion: recepcion.fechaRecepcion || "",
       ruta: recepcion.ruta || "",
       diaRuta: recepcion.diaRuta || "",
       carteristaId: recepcion.carteristaId || "",
@@ -232,13 +296,61 @@ export async function POST(request) {
     batch.set(liquidacionRef, payload);
     batch.update(recepcionRef, {
       estado: "liquidado",
+      cierreEstado: "cerrado",
       liquidacionId: liquidacionRef.id,
+      cierreRutaId,
+      cerradoAt: FieldValue.serverTimestamp(),
+      cerradoBy: actor.uid,
+      cerradoByEmail: actor.email,
       updatedAt: FieldValue.serverTimestamp(),
       updatedBy: actor.uid,
       updatedByEmail: actor.email,
     });
 
+    if (recepcion.despachoId) {
+      batch.update(db.collection("despachos").doc(recepcion.despachoId), {
+        cierreEstado: "cerrado",
+        liquidacionId: liquidacionRef.id,
+        cierreRutaId,
+        cerradoAt: FieldValue.serverTimestamp(),
+        cerradoBy: actor.uid,
+        cerradoByEmail: actor.email,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: actor.uid,
+        updatedByEmail: actor.email,
+      });
+    }
+
+    batch.set(cierreRutaRef, {
+      empresaId,
+      fecha: routeDate,
+      fechaRecepcion: recepcion.fechaRecepcion || "",
+      diaRuta: recepcion.diaRuta || "",
+      ruta: recepcion.ruta || "",
+      recepcionId: recepcion.id,
+      despachoId: recepcion.despachoId || "",
+      liquidacionId: liquidacionRef.id,
+      estado: "cerrado",
+      cerradoAt: FieldValue.serverTimestamp(),
+      cerradoBy: actor.uid,
+      cerradoByEmail: actor.email,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
     await batch.commit();
+
+    await closeRouteCollections(db, docsByCollection, {
+      cierreEstado: "cerrado",
+      cierreRutaId,
+      liquidacionId: liquidacionRef.id,
+      cerradoAt: FieldValue.serverTimestamp(),
+      cerradoBy: actor.uid,
+      cerradoByEmail: actor.email,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: actor.uid,
+      updatedByEmail: actor.email,
+    });
 
     await logAuditEvent({
       empresaId,
@@ -249,6 +361,7 @@ export async function POST(request) {
       before: recepcion,
       after: {
         recepcionId: recepcion.id,
+        cierreRutaId,
         ruta: payload.ruta,
         utilidadBruta: payload.utilidadBruta,
         netoCarterista: payload.netoCarterista,

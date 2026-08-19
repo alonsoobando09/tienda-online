@@ -7,10 +7,11 @@ import { auth, db } from "@/lib/firebase";
 import {
   collection,
   getDocs,
+  query,
+  where,
 } from "firebase/firestore";
 import { money } from "@/lib/operacion";
 import { getCurrentEmpresaId } from "@/lib/tenant";
-import { filterByEmpresaId } from "@/lib/firestoreTenant";
 import { Calculator, ReceiptText, Save } from "lucide-react";
 
 const emptyForm = {
@@ -41,28 +42,19 @@ export default function LiquidacionesAdminPage() {
   async function cargarDatos() {
     const empresaId = getCurrentEmpresaId();
     const [recepcionesSnap, liquidacionesSnap, gastosSnap] = await Promise.all([
-      getDocs(collection(db, "recepciones")),
-      getDocs(collection(db, "liquidaciones")),
-      getDocs(collection(db, "gastosRuta")),
+      getDocs(query(collection(db, "recepciones"), where("empresaId", "==", empresaId))),
+      getDocs(query(collection(db, "liquidaciones"), where("empresaId", "==", empresaId))),
+      getDocs(query(collection(db, "gastosRuta"), where("empresaId", "==", empresaId))),
     ]);
 
     setRecepciones(
-      filterByEmpresaId(
-        recepcionesSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
-        empresaId
-      )
+      recepcionesSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() }))
     );
     setLiquidaciones(
-      filterByEmpresaId(
-        liquidacionesSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
-        empresaId
-      )
+      liquidacionesSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() }))
     );
     setGastosRuta(
-      filterByEmpresaId(
-        gastosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
-        empresaId
-      )
+      gastosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() }))
     );
   }
 
@@ -95,7 +87,7 @@ export default function LiquidacionesAdminPage() {
     return gastosRuta
       .filter(
         (gasto) =>
-          gasto.fecha === recepcion.fechaRecepcion &&
+          gasto.fecha === (recepcion.fechaDespacho || recepcion.fecha || recepcion.fechaRecepcion) &&
           gasto.diaRuta === recepcion.diaRuta &&
           gasto.ruta === recepcion.ruta
       )
@@ -207,10 +199,19 @@ export default function LiquidacionesAdminPage() {
       return;
     }
 
+    const ok = confirm(
+      "Al guardar esta liquidacion se cerrara la ruta. El carterista ya no podra agregar ventas, gastos ni cambios de ese dia. Deseas continuar?"
+    );
+    if (!ok) return;
+
     setSaving(true);
 
     try {
       const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error("No hay sesion activa. Vuelve a iniciar sesion.");
+      }
+
       const response = await fetch(
         `/api/admin/liquidaciones?empresaId=${encodeURIComponent(getCurrentEmpresaId())}`,
         {
@@ -235,7 +236,7 @@ export default function LiquidacionesAdminPage() {
       await cargarDatos();
     } catch (error) {
       console.error("Error guardando liquidacion:", error);
-      alert("No se pudo guardar la liquidacion.");
+      alert(error.message || "No se pudo guardar la liquidacion.");
     } finally {
       setSaving(false);
     }
@@ -280,7 +281,10 @@ export default function LiquidacionesAdminPage() {
           <div className="admin-section-title">
             <div>
               <h2>Base de liquidacion</h2>
-              <p>Selecciona una recepcion nocturna pendiente de liquidar.</p>
+              <p>
+                Selecciona una recepcion pendiente. Al guardar, la ruta queda
+                cerrada y protegida para auditoria.
+              </p>
             </div>
             <Calculator size={28} />
           </div>

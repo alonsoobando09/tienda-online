@@ -171,6 +171,13 @@ service cloud.firestore {
       allow delete: if roleIn(["admin"]) && sameEmpresa(resource.data);
     }
 
+    match /cierresRuta/{docId} {
+      allow read: if roleIn(["admin", "bodega", "carterista", "ayudante"]) && sameEmpresa(resource.data);
+      allow create: if roleIn(["admin"]) && createSameEmpresa();
+      allow update: if roleIn(["admin"]) && updateSameEmpresa();
+      allow delete: if roleIn(["admin"]) && sameEmpresa(resource.data);
+    }
+
     match /facturasRuta/{docId} {
       allow read: if roleIn(["admin", "bodega", "carterista", "ayudante"]) && sameEmpresa(resource.data);
       allow create: if roleIn(["admin", "carterista"]) && createSameEmpresa();
