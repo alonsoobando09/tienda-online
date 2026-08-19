@@ -4,12 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
 import BarcodeCameraScanner from "@/app/components/BarcodeCameraScanner";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import {
   collection,
   doc,
   getDocs,
-  increment,
   serverTimestamp,
   writeBatch,
 } from "firebase/firestore";
@@ -46,12 +45,6 @@ function normalize(value) {
   return String(value || "")
     .trim()
     .toLowerCase();
-}
-
-function addDays(dateString, days) {
-  const date = new Date(`${dateString}T00:00:00`);
-  date.setDate(date.getDate() + (Number(days) || 0));
-  return date.toISOString().slice(0, 10);
 }
 
 export default function ComprasAdminPage() {
@@ -405,101 +398,29 @@ export default function ComprasAdminPage() {
     setSaving(true);
 
     try {
-      const compraRef = doc(collection(db, "compras"));
-      const batch = writeBatch(db);
-      const proveedor = proveedores.find((item) => item.id === header.proveedorId);
-      const empresaId = getCurrentEmpresaId();
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch(
+        `/api/admin/compras?empresaId=${encodeURIComponent(getCurrentEmpresaId())}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            header,
+            items,
+          }),
+        }
+      );
+      const result = await response.json().catch(() => ({}));
 
-      const cleanItems = items.map((item) => ({
-        ...item,
-        cantidad: Number(item.cantidad) || 0,
-        costoUnitario: Number(item.costoUnitario) || 0,
-        precioMinimo: Number(item.precioMinimo) || 0,
-        precioDetal: Number(item.precioDetal) || 0,
-        precioMaximo: Number(item.precioMaximo) || 0,
-        subtotal:
-          (Number(item.cantidad) || 0) * (Number(item.costoUnitario) || 0),
-      }));
-
-      batch.set(compraRef, {
-        ...header,
-        empresaId,
-        proveedorId: header.proveedorId,
-        proveedor: header.proveedor.trim(),
-        facturaProveedor: header.facturaProveedor.trim(),
-        totalFacturaProveedor: Number(header.totalFacturaProveedor) || 0,
-        diferenciaFactura: resumen.diferenciaFactura,
-        estadoRevisionFactura: resumen.estadoRevision,
-        alertaFactura: resumen.estadoRevision !== "cuadrada",
-        items: cleanItems,
-        totalLineas: resumen.lineas,
-        totalCantidad: resumen.cantidad,
-        totalCompra: resumen.total,
-        estado: "registrada",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      if (header.metodoPago === "credito" && resumen.total > 0) {
-        const cuentaRef = doc(collection(db, "cuentasPagar"));
-        const diasCredito = Number(proveedor?.diasCredito) || 0;
-
-        batch.set(cuentaRef, {
-          empresaId,
-          compraId: compraRef.id,
-          proveedorId: header.proveedorId,
-          proveedor: header.proveedor.trim(),
-          facturaProveedor: header.facturaProveedor.trim(),
-          fechaCompra: header.fecha,
-          fechaVencimiento: addDays(header.fecha, diasCredito),
-          total: resumen.total,
-          totalFacturaProveedor: Number(header.totalFacturaProveedor) || 0,
-          diferenciaFactura: resumen.diferenciaFactura,
-          estadoRevisionFactura: resumen.estadoRevision,
-          abonado: 0,
-          saldoPendiente: resumen.total,
-          metodoPago: header.metodoPago,
-          estado: "pendiente",
-          pagos: [],
-          observaciones: header.observaciones.trim(),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+      if (!response.ok) {
+        const detalles = Array.isArray(result.detalles)
+          ? `\n${result.detalles.join("\n")}`
+          : "";
+        throw new Error(`${result.error || "No se pudo guardar la compra."}${detalles}`);
       }
-
-      cleanItems.forEach((item) => {
-        batch.update(doc(db, "productos", item.productoId), {
-          stock: increment(item.cantidad),
-          costo: item.costoUnitario,
-          precioMayor: item.precioMinimo,
-          precioMinimo: item.precioMinimo,
-          precioDetal: item.precioDetal,
-          precioMaximo: item.precioMaximo,
-          precioPacaMayor: item.precioMaximo,
-          precioPacaDetal: item.precioMaximo,
-          proveedorId: header.proveedorId,
-          proveedor: header.proveedor.trim(),
-          updatedAt: serverTimestamp(),
-        });
-
-        batch.set(doc(collection(db, "kardex")), {
-          empresaId,
-          productoId: item.productoId,
-          productoNombre: item.nombre,
-          tipo: "entrada_compra",
-          cantidad: item.cantidad,
-          costo: item.costoUnitario,
-          subtotal: item.subtotal,
-          referenciaId: compraRef.id,
-          proveedor: header.proveedor.trim(),
-          facturaProveedor: header.facturaProveedor.trim(),
-          estadoRevisionFactura: resumen.estadoRevision,
-          fecha: header.fecha,
-          createdAt: serverTimestamp(),
-        });
-      });
-
-      await batch.commit();
 
       setHeader(emptyHeader);
       setItems([]);
@@ -508,12 +429,11 @@ export default function ComprasAdminPage() {
       await cargarDatos();
     } catch (error) {
       console.error("Error guardando compra:", error);
-      alert("No se pudo guardar la compra.");
+      alert(error.message || "No se pudo guardar la compra.");
     } finally {
       setSaving(false);
     }
   }
-
   return (
     <AdminGuard allowedRoles={["admin", "bodega"]}>
       <AdminShell
@@ -1024,3 +944,4 @@ export default function ComprasAdminPage() {
     </AdminGuard>
   );
 }
+
