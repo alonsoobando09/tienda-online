@@ -12,9 +12,7 @@ import {
   getDocs,
   query,
   serverTimestamp,
-  updateDoc,
   where,
-  writeBatch,
 } from "firebase/firestore";
 import {
   getDebtColor,
@@ -435,6 +433,42 @@ function CarteristaContent() {
     setGastoForm((current) => ({ ...current, [field]: value }));
   }
 
+  async function postRutaOperacion(action, payload = {}) {
+    const token = await auth.currentUser?.getIdToken();
+
+    if (!token) {
+      throw new Error("No hay sesion activa. Vuelve a ingresar.");
+    }
+
+    const response = await fetch(
+      `/api/ruta/operacion?empresaId=${encodeURIComponent(getProfileEmpresaId(profile))}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action,
+          fecha: today,
+          diaRuta: assignedDay,
+          ruta: assignedRoute,
+          ...payload,
+        }),
+      }
+    );
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const detalles = Array.isArray(result.detalles)
+        ? `\n${result.detalles.join("\n")}`
+        : "";
+      throw new Error(`${result.error || "No se pudo guardar."}${detalles}`);
+    }
+
+    return result;
+  }
+
   function validarRutaOperable() {
     if (!canWorkToday) {
       alert("Hoy no hay ruta activa. Pide autorizacion al administrador.");
@@ -467,27 +501,20 @@ function CarteristaContent() {
     setSaving(true);
 
     try {
-      await addDoc(collection(db, "gastosRuta"), withEmpresaId({
-        uid: profile?.uid || "",
-        empleadoNombre: profile?.nombre || "",
-        empleadoRol: profile?.role || "",
-        fecha: new Date().toISOString().slice(0, 10),
-        diaRuta: assignedDay,
-        ruta: assignedRoute,
-        persona: gastoForm.persona,
-        tipo: gastoForm.tipo,
-        valor,
-        descripcion: gastoForm.descripcion.trim(),
-        estado: "registrado",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }, profile));
+      await postRutaOperacion("gasto.create", {
+        gasto: {
+          persona: gastoForm.persona,
+          tipo: gastoForm.tipo,
+          valor,
+          descripcion: gastoForm.descripcion.trim(),
+        },
+      });
 
       setGastoForm(emptyGasto);
       await cargarDatos(false);
     } catch (error) {
       console.error("Error guardando gasto de ruta:", error);
-      alert("No se pudo guardar el gasto.");
+      alert(error.message || "No se pudo guardar el gasto.");
     } finally {
       setSaving(false);
     }
@@ -558,58 +585,13 @@ function CarteristaContent() {
     setSaving(true);
 
     try {
-      const selected = clientesRutaBase.find(
-        (cliente) => cliente.id === form.insertarDespuesDe
-      );
-      const ordenManual = Number(form.ordenVisita) || 0;
-      let ordenVisita = clientesRutaBase.length + 1;
-
-      if (ordenManual) {
-        ordenVisita = Math.min(Math.max(ordenManual, 1), clientesRutaBase.length + 1);
-      } else if (selected) {
-        ordenVisita = Number(selected.ordenVisita || 0) + 1;
-      }
-
-      const deudaActual = Number(form.deudaActual) || 0;
-      const diasDeuda = deudaActual > 0 ? Number(form.diasDeuda) || 1 : 0;
-      const batch = writeBatch(db);
-
-      clientesRutaBase
-        .filter((cliente) => Number(cliente.ordenVisita || 0) >= ordenVisita)
-        .forEach((cliente) => {
-          batch.update(doc(db, "clientes", cliente.id), {
-            ordenVisita: Number(cliente.ordenVisita || 0) + 1,
-            updatedAt: serverTimestamp(),
-          });
-        });
-
-      const clienteRef = doc(collection(db, "clientes"));
-
-      batch.set(clienteRef, withEmpresaId({
-        ...form,
-        diaRuta: assignedDay,
-        ruta: assignedRoute,
-        ordenVisita,
-        insertarDespuesDe: "",
-        deudaActual,
-        diasDeuda,
-        semaforoDeuda: getDebtColor(diasDeuda),
-        creadoPorCarterista: true,
-        pendienteRevisionOrden: Boolean(form.ordenVisita || form.insertarDespuesDe),
-        carteristaId: profile?.uid || "",
-        carteristaNombre: profile?.nombre || "",
-        solicitudBorrado: false,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }, profile));
-
-      await batch.commit();
+      await postRutaOperacion("cliente.create", { cliente: form });
 
       setForm(emptyForm);
       await cargarDatos();
     } catch (error) {
       console.error("Error agregando cliente:", error);
-      alert("No se pudo agregar el cliente.");
+      alert(error.message || "No se pudo agregar el cliente.");
     } finally {
       setSaving(false);
     }
@@ -620,114 +602,52 @@ function CarteristaContent() {
 
     if (!confirm(`Marcar ${cliente.nombre} para revision de borrado?`)) return;
 
-    await updateDoc(doc(db, "clientes", cliente.id), {
-      solicitudBorrado: true,
-      solicitudBorradoFecha: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    await cargarDatos();
+    try {
+      await postRutaOperacion("cliente.delete.request", {
+        cliente: { clienteId: cliente.id },
+      });
+      await cargarDatos();
+    } catch (error) {
+      console.error("Error solicitando borrado:", error);
+      alert(error.message || "No se pudo solicitar la revision.");
+    }
   }
 
   async function marcarVisita(cliente, estadoVisita) {
     if (!validarRutaOperable()) return;
 
     const fecha = new Date().toISOString().slice(0, 10);
-    const riesgoPerdida = estadoVisita === "riesgo_perdida";
-    const clienteAtendido = estadoVisita === "visitado";
-    const clienteEnRiesgoAntes =
-      cliente.estadoCliente === "riesgo_perdida" ||
-      cliente.estadoCliente === "perdido" ||
-      Boolean(cliente.riesgoPerdida) ||
-      Boolean(cliente.perdido);
-    const nextEstadoCliente = riesgoPerdida
-      ? "riesgo_perdida"
-      : clienteAtendido
-        ? "activo"
-        : cliente.estadoCliente || "activo";
-    const nextRiesgoPerdida = riesgoPerdida
-      ? true
-      : clienteAtendido
-        ? false
-        : Boolean(cliente.riesgoPerdida);
-    const nextPerdido = clienteAtendido || riesgoPerdida ? false : Boolean(cliente.perdido);
-    const batch = writeBatch(db);
+    let result;
 
-    batch.update(doc(db, "clientes", cliente.id), {
-      estadoVisita,
-      estadoVisitaFecha: fecha,
-      estadoCliente: nextEstadoCliente,
-      riesgoPerdida: nextRiesgoPerdida,
-      perdido: nextPerdido,
-      riesgoPerdidaFecha: riesgoPerdida ? serverTimestamp() : cliente.riesgoPerdidaFecha || null,
-      recuperadoFecha: clienteAtendido && clienteEnRiesgoAntes ? serverTimestamp() : cliente.recuperadoFecha || null,
-      ultimaGestionRuta: serverTimestamp(),
-      ultimoCarteristaGestion: profile?.nombre || "",
-      updatedAt: serverTimestamp(),
-    });
-
-    batch.set(doc(collection(db, "gestionesRuta")), withEmpresaId({
-      clienteId: cliente.id,
-      clienteNombre: cliente.nombre || "",
-      telefono: cliente.telefono || "",
-      diaRuta: assignedDay,
-      ruta: assignedRoute,
-      fecha,
-      estadoAnterior: cliente.estadoVisita || "pendiente",
-      estadoVisita,
-      estadoClienteAnterior: cliente.estadoCliente || "activo",
-      estadoCliente: nextEstadoCliente,
-      carteristaId: profile?.uid || "",
-      carteristaNombre: profile?.nombre || "",
-      deudaActual: Number(cliente.deudaActual) || 0,
-      createdAt: serverTimestamp(),
-    }, profile));
-
-    if (riesgoPerdida || (clienteAtendido && clienteEnRiesgoAntes)) {
-      batch.set(doc(collection(db, "movimientosCartera")), withEmpresaId({
-        clienteId: cliente.id,
-        clienteNombre: cliente.nombre || "",
-        telefono: cliente.telefono || "",
-        fecha,
-        diaRuta: assignedDay,
-        ruta: assignedRoute,
-        carteristaId: profile?.uid || "",
-        carteristaNombre: profile?.nombre || "",
-        deudaAnterior: Number(cliente.deudaActual) || 0,
-        nuevaDeuda: Number(cliente.deudaActual) || 0,
-        diasDeuda: Number(cliente.diasDeuda) || 0,
-        tipo: riesgoPerdida ? "riesgo_perdida_ruta" : "cliente_recuperado_ruta",
-        nota: riesgoPerdida
-          ? "Carterista marco riesgo de perder la plata"
-          : "Carterista encontro y atendio cliente en riesgo",
-        estadoCliente: nextEstadoCliente,
-        createdAt: serverTimestamp(),
-      }, profile));
+    try {
+      result = await postRutaOperacion("visita.mark", {
+        visita: { clienteId: cliente.id, estadoVisita },
+      });
+    } catch (error) {
+      console.error("Error marcando visita:", error);
+      alert(error.message || "No se pudo guardar la visita.");
+      return;
     }
 
-    await batch.commit();
+    const nextCliente = result.cliente || {};
 
     setClientes((current) =>
       current.map((item) =>
         item.id === cliente.id
           ? {
               ...item,
+              ...nextCliente,
               estadoVisita,
               estadoVisitaFecha: fecha,
               estadoVisitaHoy: getRouteVisitState(
                 {
                   ...item,
+                  ...nextCliente,
                   estadoVisita,
                   estadoVisitaFecha: fecha,
-                  estadoCliente: nextEstadoCliente,
-                  riesgoPerdida: nextRiesgoPerdida,
-                  perdido: nextPerdido,
                 },
                 fecha
               ),
-              estadoCliente: nextEstadoCliente,
-              riesgoPerdida: nextRiesgoPerdida,
-              perdido: nextPerdido,
               ultimoCarteristaGestion: profile?.nombre || "",
             }
           : item
@@ -737,11 +657,9 @@ function CarteristaContent() {
       current?.id === cliente.id
         ? {
             ...current,
+            ...nextCliente,
             estadoVisita,
             estadoVisitaFecha: fecha,
-            estadoCliente: nextEstadoCliente,
-            riesgoPerdida: nextRiesgoPerdida,
-            perdido: nextPerdido,
             ultimoCarteristaGestion: profile?.nombre || "",
           }
         : current
@@ -848,119 +766,26 @@ function CarteristaContent() {
     setSaving(true);
 
     try {
-      const facturaPayload = withEmpresaId({
-        tipo: "ruta",
-        fecha: new Date().toISOString().slice(0, 10),
-        diaRuta: assignedDay,
-        ruta: assignedRoute,
-        carteristaId: profile?.uid || "",
-        carteristaNombre: profile?.nombre || "",
-        clienteId: selectedCliente.id,
-        clienteNombre: selectedCliente.nombre || "",
-        telefono: selectedCliente.telefono || "",
-        direccion: selectedCliente.direccion || "",
-        items: saleItems.map((item) => ({
-          ...item,
-          cantidad: Number(item.cantidad) || 0,
-          precio: Number(item.precio) || 0,
-          subtotal: (Number(item.cantidad) || 0) * (Number(item.precio) || 0),
-        })),
-        deudaAnterior: resumenVenta.deudaAnterior,
-        abonoDeudaAnterior: resumenVenta.abonoAnterior,
-        totalProductos: resumenVenta.totalProductos,
-        pagoProductosHoy: resumenVenta.pagoHoy,
-        fiadoHoy: resumenVenta.fiadoHoy,
-        deudaFinal: resumenVenta.deudaFinal,
-        observaciones: pago.observaciones.trim(),
-        estado: "guardada",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }, profile);
-
-      const facturaRef = await addDoc(collection(db, "facturasRuta"), facturaPayload);
-
-      const diasDeuda = resumenVenta.deudaFinal > 0 ? 1 : 0;
-      if (
-        resumenVenta.abonoAnterior > 0 ||
-        resumenVenta.fiadoHoy > 0 ||
-        pago.observaciones.trim()
-      ) {
-        await addDoc(collection(db, "movimientosCartera"), withEmpresaId({
+      const result = await postRutaOperacion("factura.create", {
+        factura: {
           clienteId: selectedCliente.id,
-          clienteNombre: selectedCliente.nombre || "",
-          telefono: selectedCliente.telefono || "",
-          fecha: facturaPayload.fecha,
-          diaRuta: assignedDay,
-          ruta: assignedRoute,
-          facturaRutaId: facturaRef.id,
-          carteristaId: profile?.uid || "",
-          carteristaNombre: profile?.nombre || "",
-          abono: resumenVenta.abonoAnterior,
-          ventaDia: resumenVenta.totalProductos,
+          items: saleItems,
+          abonoDeudaAnterior: resumenVenta.abonoAnterior,
           pagoProductosHoy: resumenVenta.pagoHoy,
-          fiadoHoy: resumenVenta.fiadoHoy,
-          deudaAnterior: resumenVenta.deudaAnterior,
-          nuevaDeuda: resumenVenta.deudaFinal,
-          diasDeuda,
-          nota: pago.observaciones.trim(),
-          tipo: resumenVenta.abonoAnterior > 0 ? "abono_ruta" : "visita_ruta",
-          createdAt: serverTimestamp(),
-        }, profile));
-      }
-
-      await updateDoc(doc(db, "clientes", selectedCliente.id), {
-        deudaActual: resumenVenta.deudaFinal,
-        diasDeuda,
-        semaforoDeuda: getDebtColor(diasDeuda),
-        estadoVisita: "visitado",
-        estadoVisitaFecha: facturaPayload.fecha,
-        estadoCliente: "activo",
-        riesgoPerdida: false,
-        perdido: false,
-        ultimaNotaCartera: pago.observaciones.trim(),
-        ultimoAbono: resumenVenta.abonoAnterior,
-        ultimoMovimientoCartera: serverTimestamp(),
-        ultimaVisita: serverTimestamp(),
-        ultimaGestionRuta: serverTimestamp(),
-        ultimoCarteristaGestion: profile?.nombre || "",
-        updatedAt: serverTimestamp(),
+          observaciones: pago.observaciones.trim(),
+        },
       });
+      const facturaGuardada = result.factura;
+      const diasDeuda = facturaGuardada.deudaFinal > 0 ? 1 : 0;
 
-      if (
-        selectedCliente.estadoCliente === "riesgo_perdida" ||
-        selectedCliente.estadoCliente === "perdido" ||
-        selectedCliente.riesgoPerdida ||
-        selectedCliente.perdido
-      ) {
-        await addDoc(collection(db, "movimientosCartera"), withEmpresaId({
-          clienteId: selectedCliente.id,
-          clienteNombre: selectedCliente.nombre || "",
-          telefono: selectedCliente.telefono || "",
-          fecha: facturaPayload.fecha,
-          diaRuta: assignedDay,
-          ruta: assignedRoute,
-          facturaRutaId: facturaRef.id,
-          carteristaId: profile?.uid || "",
-          carteristaNombre: profile?.nombre || "",
-          deudaAnterior: resumenVenta.deudaAnterior,
-          nuevaDeuda: resumenVenta.deudaFinal,
-          diasDeuda,
-          tipo: "cliente_recuperado_ruta",
-          nota: "Cliente en riesgo/perdido fue atendido y facturado en ruta",
-          estadoCliente: "activo",
-          createdAt: serverTimestamp(),
-        }, profile));
-      }
-
-      const facturaGuardada = { id: facturaRef.id, ...facturaPayload };
       setUltimaFactura(facturaGuardada);
       setSelectedCliente((current) => ({
         ...current,
-        deudaActual: resumenVenta.deudaFinal,
+        deudaActual: facturaGuardada.deudaFinal,
         diasDeuda,
         semaforoDeuda: getDebtColor(diasDeuda),
         estadoVisita: "visitado",
-        estadoVisitaFecha: facturaPayload.fecha,
+        estadoVisitaFecha: facturaGuardada.fecha,
         estadoCliente: "activo",
         riesgoPerdida: false,
         perdido: false,
@@ -970,7 +795,7 @@ function CarteristaContent() {
       await cargarDatos(false);
     } catch (error) {
       console.error("Error guardando factura:", error);
-      alert("No se pudo guardar la factura.");
+      alert(error.message || "No se pudo guardar la factura.");
     } finally {
       setSaving(false);
     }
