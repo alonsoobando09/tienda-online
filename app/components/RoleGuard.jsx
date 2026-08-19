@@ -20,12 +20,12 @@ export default function RoleGuard({ allowedRoles = [], children }) {
         const profile = await getUserProfile(user);
 
         if (!user) {
-          router.push("/login");
+          router.replace("/login");
           return;
         }
 
         if (!profile.allowed || !canAccessRole(profile.role, allowed)) {
-          router.push(getRoleHome(profile.role));
+          router.replace(getRoleHome(profile.role));
           return;
         }
 
@@ -35,7 +35,7 @@ export default function RoleGuard({ allowedRoles = [], children }) {
         setAuthorized(true);
       } catch (error) {
         console.error("Error verificando rol:", error);
-        router.push("/login");
+        router.replace("/login");
       } finally {
         setChecking(false);
       }

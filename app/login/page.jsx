@@ -61,7 +61,7 @@ export default function LoginPage() {
         localStorage.removeItem("adminEmail");
       }
 
-      router.push(getRoleHome(profile.role));
+      router.replace(getRoleHome(profile.role));
     } catch (error) {
       console.error(error);
       setErrorMessage(getLoginErrorMessage(error));

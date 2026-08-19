@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { getUserProfile, normalizeRole } from "@/lib/authRoles";
+import { getRoleHome, getUserProfile, normalizeRole } from "@/lib/authRoles";
 import { canAccessRole } from "@/lib/permissions";
 
 export default function AdminGuard({ allowedRoles = ["admin"], children }) {
@@ -23,7 +23,7 @@ export default function AdminGuard({ allowedRoles = ["admin"], children }) {
 
         if (!user || !profile.allowed || !canAccessRole(profile.role, allowed)) {
           localStorage.removeItem("admin");
-          router.push(user ? "/" : "/login");
+          router.replace(user ? getRoleHome(profile.role) : "/login");
           return;
         }
 
@@ -38,7 +38,7 @@ export default function AdminGuard({ allowedRoles = ["admin"], children }) {
         setAuthorized(true);
       } catch (error) {
         console.error(error);
-        router.push("/login");
+        router.replace("/login");
       } finally {
         setLoading(false);
       }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { getUserProfile } from "@/lib/authRoles";
+import { getRoleHome, getUserProfile } from "@/lib/authRoles";
 import { usePathname, useRouter } from "next/navigation";
 
 const bodegaRoutes = ["/admin/despachos", "/admin/recepciones", "/admin/inventario"];
@@ -41,7 +41,7 @@ export default function AdminLayout({ children }) {
 
         if (!user || !profile.allowed || !canOpenAdminRoute(profile, pathname)) {
           setAuthorized(false);
-          router.push(user ? "/" : "/login");
+          router.replace(user ? getRoleHome(profile.role) : "/login");
           return;
         }
 
