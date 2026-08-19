@@ -22,6 +22,7 @@ const emptyForm = {
   uid: "",
   telefono: "",
   email: "",
+  password: "",
   documento: "",
   pagoDiario: "",
   diaRuta: "martes",
@@ -102,6 +103,7 @@ export default function EmpleadosPage() {
       uid: empleado.uid || "",
       telefono: empleado.telefono || "",
       email: empleado.email || "",
+      password: "",
       documento: empleado.documento || "",
       pagoDiario: empleado.pagoDiario || "",
       diaRuta: empleado.diaRuta || "martes",
@@ -124,6 +126,7 @@ export default function EmpleadosPage() {
       id: editingId,
       uid: form.uid.trim(),
       email: form.email.trim().toLowerCase(),
+      password: form.password,
       pagoDiario: Number(form.pagoDiario) || 0,
     };
 
@@ -482,7 +485,7 @@ export default function EmpleadosPage() {
               <input
                 value={form.uid}
                 onChange={(event) => updateField("uid", event.target.value)}
-                placeholder="UID de Authentication"
+                placeholder="Se llena solo si creas con correo y contraseña"
               />
             </label>
 
@@ -500,6 +503,18 @@ export default function EmpleadosPage() {
                 type="email"
                 value={form.email}
                 onChange={(event) => updateField("email", event.target.value)}
+              />
+            </label>
+
+            <label>
+              Contraseña inicial
+              <input
+                autoComplete="new-password"
+                minLength={6}
+                placeholder={editingId ? "Dejar vacia para no cambiarla" : "Minimo 6 caracteres"}
+                type="password"
+                value={form.password}
+                onChange={(event) => updateField("password", event.target.value)}
               />
             </label>
 
@@ -575,9 +590,9 @@ export default function EmpleadosPage() {
             )}
 
             <p className="admin-help" style={{ gridColumn: "1 / -1" }}>
-              Para activar el acceso: crea el usuario en Firebase Authentication,
-              copia su UID y pegalo aqui. Al guardar se actualiza la coleccion
-              usuarios con el rol correcto.
+              Para activar el acceso: escribe correo y contraseña inicial. El
+              sistema crea el usuario en Firebase Authentication, guarda el UID
+              y actualiza la coleccion usuarios con el rol correcto.
             </p>
           </form>
         </section>

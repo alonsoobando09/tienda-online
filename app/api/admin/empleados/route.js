@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { getAdminDb } from "@/lib/firebaseAdmin";
+import { getAdminAuth, getAdminDb } from "@/lib/firebaseAdmin";
 import { logAuditEvent } from "@/lib/audit";
 import { belongsToEmpresaId } from "@/lib/firestoreTenant";
 import { ROLES } from "@/lib/permissions";
@@ -16,6 +16,10 @@ function cleanText(value) {
 
 function cleanEmail(value) {
   return cleanText(value).toLowerCase();
+}
+
+function cleanPassword(value) {
+  return String(value || "");
 }
 
 function buildEmpleadoPayload(input, empresaId) {
@@ -61,18 +65,64 @@ function assertCanAssignRole(actor, role) {
   }
 }
 
+function assertPassword(password) {
+  if (password && password.length < 6) {
+    const error = new Error("La contraseña debe tener minimo 6 caracteres");
+    error.status = 400;
+    throw error;
+  }
+}
+
+async function createAuthUserIfNeeded(payload, password) {
+  if (payload.uid || !payload.email || !password) return payload;
+
+  assertPassword(password);
+
+  const userRecord = await getAdminAuth().createUser({
+    email: payload.email,
+    password,
+    displayName: payload.nombre,
+    disabled: payload.estado === "inactivo" || payload.estado === "bloqueado",
+  });
+
+  return {
+    ...payload,
+    uid: userRecord.uid,
+  };
+}
+
+async function syncAuthUser(payload, password) {
+  if (!payload.uid) return;
+
+  const authUpdate = {
+    displayName: payload.nombre || undefined,
+    disabled: payload.estado === "inactivo" || payload.estado === "bloqueado",
+  };
+
+  if (payload.email) authUpdate.email = payload.email;
+  if (password) {
+    assertPassword(password);
+    authUpdate.password = password;
+  }
+
+  await getAdminAuth().updateUser(payload.uid, authUpdate);
+}
+
 export async function POST(request) {
   try {
     const actor = await requirePermission(request, "empleados.manage");
     const empresaId = getRequestEmpresaId(request, actor);
     const body = await request.json();
-    const payload = buildEmpleadoPayload(body, empresaId);
+    let payload = buildEmpleadoPayload(body, empresaId);
+    const password = cleanPassword(body.password);
 
     assertCanAssignRole(actor, payload.rol);
 
     if (!payload.nombre) {
       return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
     }
+
+    payload = await createAuthUserIfNeeded(payload, password);
 
     const db = getAdminDb();
     const empleadoRef = await db.collection("empleados").add({
@@ -85,6 +135,10 @@ export async function POST(request) {
     });
 
     if (payload.uid) {
+      if (body.uid || password) {
+        await syncAuthUser(payload, password);
+      }
+
       await db
         .collection("usuarios")
         .doc(payload.uid)
@@ -131,6 +185,7 @@ export async function PUT(request) {
     }
 
     const payload = buildEmpleadoPayload(body, empresaId);
+    const password = cleanPassword(body.password);
     assertCanAssignRole(actor, payload.rol);
 
     await empleadoRef.update({
@@ -144,6 +199,10 @@ export async function PUT(request) {
     }
 
     if (payload.uid) {
+      if (password) {
+        await syncAuthUser(payload, password);
+      }
+
       await db
         .collection("usuarios")
         .doc(payload.uid)
