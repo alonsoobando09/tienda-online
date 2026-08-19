@@ -3,14 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import {
-  addDoc,
   collection,
-  doc,
   getDocs,
-  serverTimestamp,
-  updateDoc,
 } from "firebase/firestore";
 import { money } from "@/lib/operacion";
 import { getCurrentEmpresaId } from "@/lib/tenant";
@@ -214,94 +210,26 @@ export default function LiquidacionesAdminPage() {
     setSaving(true);
 
     try {
-      const liquidacionRef = await addDoc(collection(db, "liquidaciones"), {
-        empresaId: getCurrentEmpresaId(),
-        recepcionId: recepcion.id,
-        despachoId: recepcion.despachoId || "",
-        fecha: recepcion.fechaRecepcion || "",
-        ruta: recepcion.ruta || "",
-        diaRuta: recepcion.diaRuta || "",
-        carteristaId: recepcion.carteristaId || "",
-        carteristaNombre: recepcion.carteristaNombre || "",
-        ayudanteId: recepcion.ayudanteId || "",
-        ayudanteNombre: recepcion.ayudanteNombre || "",
-        totalFacturasRuta: number(recepcion.totalFacturasRuta),
-        totalGestionesRuta: number(recepcion.totalGestionesRuta),
-        clientesVisitadosRuta: number(recepcion.clientesVisitadosRuta),
-        clientesNoDisponiblesRuta: number(recepcion.clientesNoDisponiblesRuta),
-        clientesRiesgoRuta: number(recepcion.clientesRiesgoRuta),
-        deudaGestionadaRuta: number(recepcion.deudaGestionadaRuta),
-        resumenGestionesRuta: recepcion.resumenGestionesRuta || {},
-        gestionesRutaIds: recepcion.gestionesRutaIds || [],
-        auditoriaEstado: recepcion.auditoriaEstado || "",
-        auditoriaAlertas: recepcion.auditoriaAlertas || [],
-        diferenciasProducto,
-        diferenciaDejadoFacturado: number(recepcion.diferenciaDejadoFacturado),
-        totalDejadoFacturado: number(recepcion.totalDejadoFacturado),
-        valorProductosDejados: calculo.valorProductosDejados,
-        costoProductosDejados: calculo.costoProductosDejados,
-        utilidadBruta: calculo.utilidadBruta,
-        dineroEntregado: number(recepcion.dineroEntregado),
-        pagosRuta: recepcion.pagosRuta || {
-          efectivo: number(recepcion.dineroEntregado),
-          total: number(recepcion.dineroEntregado),
-        },
-        gastosRuta: number(recepcion.gastosRuta),
-        prestamosRuta: number(recepcion.prestamos),
-        descuadreDinero: number(recepcion.descuadreDinero),
-        dineroFaltante: calculo.dineroFaltante,
-        dineroSobrante: calculo.dineroSobrante,
-        costoFaltante: number(recepcion.costoFaltante),
-        productosFaltantes: productosFaltantes.map((item) => ({
-          productoId: item.productoId,
-          nombre: item.nombre,
-          sku: item.sku || "",
-          cantidad: number(item.cantidad),
-          devuelto: number(item.devuelto),
-          dejado: number(item.dejado),
-          faltante: number(item.faltante),
-          costo: number(item.costo),
-          costoFaltante: number(item.costoFaltante),
-        })),
-        pagoBaseAyudante: calculo.pagoBaseAyudante,
-        clientesAbiertos: number(form.clientesAbiertos),
-        valorClienteAbierto: number(form.valorClienteAbierto),
-        bonoClientes: calculo.bonoClientes,
-        totalAyudanteBruto: calculo.totalAyudanteBruto,
-        gananciaDespuesAyudante: calculo.gananciaDespuesAyudante,
-        mitadAdministrador: calculo.mitadAdministrador,
-        mitadCarterista: calculo.mitadCarterista,
-        descuentosCarterista: calculo.descuentosCarterista,
-        descuentosAyudante: calculo.descuentosAyudante,
-        netoCarterista: calculo.netoCarterista,
-        netoAyudante: calculo.netoAyudante,
-        netoAdministrador: calculo.netoAdministrador,
-        detalleDescuentos: {
-          carteristaAlmuerzo: number(form.carteristaAlmuerzo),
-          carteristaPrestamos: number(form.carteristaPrestamos),
-          carteristaConsumos: number(form.carteristaConsumos),
-          ayudanteAlmuerzo: number(form.ayudanteAlmuerzo),
-          ayudantePrestamos: number(form.ayudantePrestamos),
-          ayudanteConsumos: number(form.ayudanteConsumos),
-        },
-        gastosRutaRegistrados: gastosRecepcion.map((gasto) => gasto.id),
-        resumenGastosRuta: {
-          total: resumenGastos.total,
-          otrosRuta: resumenGastos.otrosRuta,
-          carterista: resumenGastos.carterista,
-          ayudante: resumenGastos.ayudante,
-        },
-        observaciones: form.observaciones.trim(),
-        estado: "liquidado",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch(
+        `/api/admin/liquidaciones?empresaId=${encodeURIComponent(getCurrentEmpresaId())}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            recepcionId: recepcion.id,
+            form,
+          }),
+        }
+      );
+      const result = await response.json().catch(() => ({}));
 
-      await updateDoc(doc(db, "recepciones", recepcion.id), {
-        estado: "liquidado",
-        liquidacionId: liquidacionRef.id,
-        updatedAt: serverTimestamp(),
-      });
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo guardar la liquidacion.");
+      }
 
       setForm(emptyForm);
       await cargarDatos();
