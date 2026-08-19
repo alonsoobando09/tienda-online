@@ -4,15 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
 import BarcodeCameraScanner from "@/app/components/BarcodeCameraScanner";
-import { db } from "@/lib/firebase";
-import {
-  collection,
-  doc,
-  getDocs,
-  increment,
-  serverTimestamp,
-  writeBatch,
-} from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { collection, getDocs } from "firebase/firestore";
 import { useEmpleados } from "@/lib/useEmpleados";
 import { getCurrentEmpresaId } from "@/lib/tenant";
 import { filterByEmpresaId } from "@/lib/firestoreTenant";
@@ -239,13 +232,13 @@ export default function DespachosAdminPage() {
     setSaving(true);
 
     try {
-      const carterista = empleados.find(
-        (empleado) => empleado.id === header.carteristaId
-      );
-      const ayudante = empleados.find((empleado) => empleado.id === header.ayudanteId);
-      const despachoRef = doc(collection(db, "despachos"));
-      const batch = writeBatch(db);
       const empresaId = getCurrentEmpresaId();
+      const token = await auth.currentUser?.getIdToken();
+
+      if (!token) {
+        alert("Debes iniciar sesion para guardar despachos.");
+        return;
+      }
 
       const cleanItems = items.map((item) => ({
         ...item,
@@ -254,46 +247,25 @@ export default function DespachosAdminPage() {
         precioDetal: Number(item.precioDetal) || 0,
       }));
 
-      batch.set(despachoRef, {
-        ...header,
-        empresaId,
-        carteristaNombre: carterista?.nombre || "",
-        ayudanteNombre: ayudante?.nombre || "",
-        items: cleanItems,
-        totalCantidad: resumen.cantidad,
-        totalCosto: resumen.costo,
-        totalVentaEstimada: resumen.venta,
-        gananciaEstimada: resumen.ganancia,
-        margenEstimado,
-        auditoriaEstado: auditoria.estado,
-        auditoriaAlertas: auditoria.alertas,
-        estado: "despachado",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const response = await fetch(`/api/admin/despachos?empresaId=${empresaId}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          header,
+          items: cleanItems,
+        }),
       });
 
-      cleanItems.forEach((item) => {
-        batch.update(doc(db, "productos", item.productoId), {
-          stock: increment(-item.cantidad),
-          updatedAt: serverTimestamp(),
-        });
+      const result = await response.json();
 
-        batch.set(doc(collection(db, "kardex")), {
-          empresaId,
-          productoId: item.productoId,
-          productoNombre: item.nombre,
-          tipo: "salida_despacho",
-          cantidad: -item.cantidad,
-          costo: item.costo,
-          referenciaId: despachoRef.id,
-          ruta: header.ruta,
-          diaRuta: header.diaRuta,
-          fecha: header.fecha,
-          createdAt: serverTimestamp(),
-        });
-      });
+      if (!response.ok) {
+        const details = Array.isArray(result.detalles) ? `\n- ${result.detalles.join("\n- ")}` : "";
+        throw new Error(`${result.error || "No se pudo guardar el despacho."}${details}`);
+      }
 
-      await batch.commit();
       setHeader(emptyHeader);
       setItems([]);
       setSearch("");
@@ -307,7 +279,7 @@ export default function DespachosAdminPage() {
       );
     } catch (error) {
       console.error("Error guardando despacho:", error);
-      alert("No se pudo guardar el despacho.");
+      alert(error.message || "No se pudo guardar el despacho.");
     } finally {
       setSaving(false);
     }
