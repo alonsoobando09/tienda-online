@@ -4,15 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
-import { db } from "@/lib/firebase";
-import {
-  collection,
-  doc,
-  getDocs,
-  increment,
-  serverTimestamp,
-  writeBatch,
-} from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { collection, getDocs } from "firebase/firestore";
 import { getCurrentEmpresaId } from "@/lib/tenant";
 import { filterByEmpresaId } from "@/lib/firestoreTenant";
 
@@ -244,7 +237,6 @@ export default function InventarioPage() {
     }
 
     const isSalida = adjustment.tipo === "ajuste_manual_salida";
-    const delta = isSalida ? cantidad * -1 : cantidad;
     const stockActual = number(producto.stock);
 
     if (isSalida && cantidad > stockActual) {
@@ -255,32 +247,43 @@ export default function InventarioPage() {
     setSavingAdjustment(true);
 
     try {
-      const batch = writeBatch(db);
-      const costo = number(producto.costo || producto.precioMayor);
-      const fecha = new Date().toISOString().slice(0, 10);
       const empresaId = getCurrentEmpresaId();
+      const token = await auth.currentUser?.getIdToken();
 
-      batch.update(doc(db, "productos", producto.id), {
-        stock: increment(delta),
-        updatedAt: serverTimestamp(),
-      });
+      if (!token) {
+        alert("Debes iniciar sesion para guardar ajustes de inventario.");
+        return;
+      }
 
-      batch.set(doc(collection(db, "kardex")), {
-        empresaId,
-        productoId: producto.id,
-        productoNombre: producto.nombre || "Producto",
-        tipo: adjustment.tipo,
-        cantidad: delta,
-        costo,
-        subtotal: Math.abs(delta) * costo,
-        referenciaId: "ajuste-manual",
-        observacion: adjustment.motivo.trim(),
-        afectaStock: true,
-        fecha,
-        createdAt: serverTimestamp(),
-      });
+      const response = await fetch(
+        `/api/admin/inventario/ajustes?empresaId=${encodeURIComponent(empresaId)}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            productoId: producto.id,
+            tipo: adjustment.tipo,
+            cantidad,
+            motivo: adjustment.motivo.trim(),
+          }),
+        }
+      );
 
-      await batch.commit();
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const details = Array.isArray(result.detalles)
+          ? `\n- ${result.detalles.join("\n- ")}`
+          : "";
+        throw new Error(`${result.error || "No se pudo guardar el ajuste."}${details}`);
+      }
+
+      if (typeof result.stockDespues === "number") {
+        alert(`Ajuste guardado. Stock nuevo: ${result.stockDespues}`);
+      }
 
       setAdjustment({
         productoId: "",
