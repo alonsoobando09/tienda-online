@@ -53,6 +53,59 @@ body {
   margin-top: 28px;
 }
 
+.pc-install-card {
+  align-items: center;
+  background: rgba(255, 250, 240, 0.11);
+  border: 1px solid rgba(248, 244, 234, 0.22);
+  border-radius: 8px;
+  color: #fffaf0;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-top: 16px;
+  max-width: 680px;
+  padding: 14px;
+}
+
+.pc-install-card div {
+  display: grid;
+  gap: 3px;
+}
+
+.pc-install-card strong {
+  font-size: 16px;
+}
+
+.pc-install-card span,
+.pc-install-card small {
+  color: rgba(248, 244, 234, 0.78);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.pc-install-card small {
+  color: #f4ca64;
+}
+
+.pc-install-card button {
+  align-items: center;
+  background: #d8ae4f;
+  border: 0;
+  border-radius: 8px;
+  color: #062819;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 900;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 16px;
+  white-space: nowrap;
+}
+
+.pc-install-card.installed {
+  justify-content: flex-start;
+}
+
 .pc-app-device {
   aspect-ratio: 0.72;
   background:
@@ -197,6 +250,16 @@ body {
 
   .pc-app-actions,
   .pc-app-actions .home-button {
+    width: 100%;
+  }
+
+  .pc-install-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pc-install-card button {
+    justify-content: center;
     width: 100%;
   }
 

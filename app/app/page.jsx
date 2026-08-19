@@ -8,10 +8,10 @@ import {
   Route,
   ShieldCheck,
   Smartphone,
-  Store,
   Truck,
   Users,
 } from "lucide-react";
+import PwaInstallCard from "@/app/components/PwaInstallCard";
 
 const modules = [
   {
@@ -31,12 +31,6 @@ const modules = [
     description: "Ruta del dia, clientes, facturas, gastos y ubicacion.",
     href: "/carterista",
     icon: Route,
-  },
-  {
-    title: "Tienda virtual",
-    description: "Canal publico para vender productos online.",
-    href: "/",
-    icon: Store,
   },
 ];
 
@@ -74,6 +68,7 @@ export default function OperationalAppPage() {
               Entrar carterista
             </Link>
           </div>
+          <PwaInstallCard />
         </div>
         <div className="pc-app-device" aria-hidden="true">
           <span>PC</span>
