@@ -13,6 +13,8 @@ import {
   serverTimestamp,
   writeBatch,
 } from "firebase/firestore";
+import { getCurrentEmpresaId } from "@/lib/tenant";
+import { filterByEmpresaId } from "@/lib/firestoreTenant";
 
 const money = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -72,15 +74,20 @@ export default function InventarioPage() {
     setLoading(true);
 
     try {
+      const empresaId = getCurrentEmpresaId();
       const [productosData, kardexSnap] = await Promise.all([
         fetch("/api/productos").then((res) => res.json()),
         getDocs(collection(db, "kardex")),
       ]);
 
-      setProductos(Array.isArray(productosData) ? productosData : []);
+      setProductos(
+        filterByEmpresaId(Array.isArray(productosData) ? productosData : [], empresaId)
+      );
       setMovimientos(
-        kardexSnap.docs
-          .map((docu) => ({ id: docu.id, ...docu.data() }))
+        filterByEmpresaId(
+          kardexSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
+          empresaId
+        )
           .sort((a, b) => movementTime(b.createdAt) - movementTime(a.createdAt))
       );
     } finally {
@@ -251,6 +258,7 @@ export default function InventarioPage() {
       const batch = writeBatch(db);
       const costo = number(producto.costo || producto.precioMayor);
       const fecha = new Date().toISOString().slice(0, 10);
+      const empresaId = getCurrentEmpresaId();
 
       batch.update(doc(db, "productos", producto.id), {
         stock: increment(delta),
@@ -258,6 +266,7 @@ export default function InventarioPage() {
       });
 
       batch.set(doc(collection(db, "kardex")), {
+        empresaId,
         productoId: producto.id,
         productoNombre: producto.nombre || "Producto",
         tipo: adjustment.tipo,

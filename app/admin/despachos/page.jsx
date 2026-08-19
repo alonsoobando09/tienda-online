@@ -14,6 +14,8 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { useEmpleados } from "@/lib/useEmpleados";
+import { getCurrentEmpresaId } from "@/lib/tenant";
+import { filterByEmpresaId } from "@/lib/firestoreTenant";
 import { diasRuta, money, rutasBase } from "@/lib/operacion";
 import { AlertTriangle, Barcode, PackagePlus, Save, Trash2 } from "lucide-react";
 
@@ -48,11 +50,18 @@ export default function DespachosAdminPage() {
     ])
       .then(([productosSnap, despachosSnap]) => {
         if (!active) return;
+        const empresaId = getCurrentEmpresaId();
         setProductos(
-          productosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() }))
+          filterByEmpresaId(
+            productosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
+            empresaId
+          )
         );
         setDespachos(
-          despachosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() }))
+          filterByEmpresaId(
+            despachosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
+            empresaId
+          )
         );
       })
       .finally(() => {
@@ -236,6 +245,7 @@ export default function DespachosAdminPage() {
       const ayudante = empleados.find((empleado) => empleado.id === header.ayudanteId);
       const despachoRef = doc(collection(db, "despachos"));
       const batch = writeBatch(db);
+      const empresaId = getCurrentEmpresaId();
 
       const cleanItems = items.map((item) => ({
         ...item,
@@ -246,6 +256,7 @@ export default function DespachosAdminPage() {
 
       batch.set(despachoRef, {
         ...header,
+        empresaId,
         carteristaNombre: carterista?.nombre || "",
         ayudanteNombre: ayudante?.nombre || "",
         items: cleanItems,
@@ -268,6 +279,7 @@ export default function DespachosAdminPage() {
         });
 
         batch.set(doc(collection(db, "kardex")), {
+          empresaId,
           productoId: item.productoId,
           productoNombre: item.nombre,
           tipo: "salida_despacho",
@@ -287,7 +299,12 @@ export default function DespachosAdminPage() {
       setSearch("");
 
       const despachosSnap = await getDocs(collection(db, "despachos"));
-      setDespachos(despachosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })));
+      setDespachos(
+        filterByEmpresaId(
+          despachosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
+          empresaId
+        )
+      );
     } catch (error) {
       console.error("Error guardando despacho:", error);
       alert("No se pudo guardar el despacho.");

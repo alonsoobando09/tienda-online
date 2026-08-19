@@ -13,6 +13,8 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { money } from "@/lib/operacion";
+import { getCurrentEmpresaId } from "@/lib/tenant";
+import { filterByEmpresaId } from "@/lib/firestoreTenant";
 import { Calculator, ReceiptText, Save } from "lucide-react";
 
 const emptyForm = {
@@ -41,6 +43,7 @@ export default function LiquidacionesAdminPage() {
   const [saving, setSaving] = useState(false);
 
   async function cargarDatos() {
+    const empresaId = getCurrentEmpresaId();
     const [recepcionesSnap, liquidacionesSnap, gastosSnap] = await Promise.all([
       getDocs(collection(db, "recepciones")),
       getDocs(collection(db, "liquidaciones")),
@@ -48,12 +51,23 @@ export default function LiquidacionesAdminPage() {
     ]);
 
     setRecepciones(
-      recepcionesSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() }))
+      filterByEmpresaId(
+        recepcionesSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
+        empresaId
+      )
     );
     setLiquidaciones(
-      liquidacionesSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() }))
+      filterByEmpresaId(
+        liquidacionesSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
+        empresaId
+      )
     );
-    setGastosRuta(gastosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })));
+    setGastosRuta(
+      filterByEmpresaId(
+        gastosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
+        empresaId
+      )
+    );
   }
 
   useEffect(() => {
@@ -201,6 +215,7 @@ export default function LiquidacionesAdminPage() {
 
     try {
       const liquidacionRef = await addDoc(collection(db, "liquidaciones"), {
+        empresaId: getCurrentEmpresaId(),
         recepcionId: recepcion.id,
         despachoId: recepcion.despachoId || "",
         fecha: recepcion.fechaRecepcion || "",

@@ -14,6 +14,8 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { money } from "@/lib/operacion";
+import { getCurrentEmpresaId } from "@/lib/tenant";
+import { filterByEmpresaId } from "@/lib/firestoreTenant";
 import { Barcode, PackagePlus, Save, Trash2 } from "lucide-react";
 import { categories } from "@/lib/categories";
 
@@ -69,6 +71,7 @@ export default function ComprasAdminPage() {
     setLoading(true);
 
     try {
+      const empresaId = getCurrentEmpresaId();
       const [productosSnap, proveedoresSnap, comprasSnap] = await Promise.all([
         getDocs(collection(db, "productos")),
         getDocs(collection(db, "proveedores")),
@@ -76,17 +79,27 @@ export default function ComprasAdminPage() {
       ]);
 
       setProductos(
-        productosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() }))
+        filterByEmpresaId(
+          productosSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
+          empresaId
+        )
       );
       setProveedores(
-        proveedoresSnap.docs
-          .map((docu) => ({ id: docu.id, ...docu.data() }))
+        filterByEmpresaId(
+          proveedoresSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
+          empresaId
+        )
           .filter((proveedor) => proveedor.estado !== "inactivo")
           .sort((a, b) =>
             String(a.nombre || "").localeCompare(String(b.nombre || ""))
           )
       );
-      setCompras(comprasSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })));
+      setCompras(
+        filterByEmpresaId(
+          comprasSnap.docs.map((docu) => ({ id: docu.id, ...docu.data() })),
+          empresaId
+        )
+      );
     } finally {
       setLoading(false);
     }
@@ -302,6 +315,7 @@ export default function ComprasAdminPage() {
 
     try {
       const productoRef = doc(collection(db, "productos"));
+      const empresaId = getCurrentEmpresaId();
       const costo = Number(newProduct.costoUnitario) || 0;
       const precioMinimo = Number(newProduct.precioMinimo) || costo;
       const precioDetal = Number(newProduct.precioDetal) || precioMinimo;
@@ -323,6 +337,7 @@ export default function ComprasAdminPage() {
         precioPacaDetal: precioMaximo,
         stock: 0,
         stockMinimo: 5,
+        empresaId,
         imagen: "",
         imagenes: [],
         descripcion: "",
@@ -393,6 +408,7 @@ export default function ComprasAdminPage() {
       const compraRef = doc(collection(db, "compras"));
       const batch = writeBatch(db);
       const proveedor = proveedores.find((item) => item.id === header.proveedorId);
+      const empresaId = getCurrentEmpresaId();
 
       const cleanItems = items.map((item) => ({
         ...item,
@@ -407,6 +423,7 @@ export default function ComprasAdminPage() {
 
       batch.set(compraRef, {
         ...header,
+        empresaId,
         proveedorId: header.proveedorId,
         proveedor: header.proveedor.trim(),
         facturaProveedor: header.facturaProveedor.trim(),
@@ -428,6 +445,7 @@ export default function ComprasAdminPage() {
         const diasCredito = Number(proveedor?.diasCredito) || 0;
 
         batch.set(cuentaRef, {
+          empresaId,
           compraId: compraRef.id,
           proveedorId: header.proveedorId,
           proveedor: header.proveedor.trim(),
@@ -465,6 +483,7 @@ export default function ComprasAdminPage() {
         });
 
         batch.set(doc(collection(db, "kardex")), {
+          empresaId,
           productoId: item.productoId,
           productoNombre: item.nombre,
           tipo: "entrada_compra",
