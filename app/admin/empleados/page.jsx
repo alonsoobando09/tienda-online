@@ -362,6 +362,12 @@ export default function EmpleadosPage() {
       <AdminShell
         title="Empleados"
         subtitle="Gestiona equipo, roles de acceso, pagos diarios y rutas asignadas."
+        actions={
+          <a className="admin-button" href="#nuevo-usuario">
+            <UserPlus size={18} />
+            Agregar usuario
+          </a>
+        }
       >
         <section className="admin-grid admin-kpis">
           <article className="admin-card admin-stat-green">
@@ -436,7 +442,7 @@ export default function EmpleadosPage() {
           </article>
         </section>
 
-        <section className="admin-card admin-accent-card">
+        <section className="admin-card admin-accent-card" id="nuevo-usuario">
           <div className="admin-section-title">
             <div>
               <h2>{editingId ? "Editar empleado" : "Nuevo empleado"}</h2>

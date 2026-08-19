@@ -24,6 +24,12 @@ const modules = [
     icon: BarChart3,
   },
   {
+    title: "Usuarios y empleados",
+    description: "Crear correos, contraseñas, roles, rutas y permisos de acceso.",
+    href: "/admin/empleados",
+    icon: Users,
+  },
+  {
     title: "Bodega",
     description: "Compras, proveedores, inventario, despachos y recepciones.",
     href: "/admin/despachos",

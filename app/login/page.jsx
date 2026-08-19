@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   sendPasswordResetEmail,
@@ -130,6 +131,11 @@ export default function LoginPage() {
         <button type="button" onClick={resetPassword} disabled={loading}>
           Recuperar contraseña
         </button>
+
+        <p style={{ color: "#475569", fontSize: 14, lineHeight: 1.4, margin: "8px 0 0" }}>
+          Para crear usuarios: ingresa con el administrador y entra a{" "}
+          <Link href="/admin/empleados">Admin &gt; Empleados</Link>.
+        </p>
       </form>
     </main>
   );
