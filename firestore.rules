@@ -207,7 +207,7 @@ service cloud.firestore {
 
     match /ubicacionesRuta/{docId} {
       allow read: if roleIn(["admin"]) && sameEmpresa(resource.data);
-      allow create: if roleIn(["carterista", "ayudante"]) && createSameEmpresa();
+      allow create: if false;
       allow update, delete: if false;
     }
 

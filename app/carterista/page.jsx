@@ -5,13 +5,11 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import RoleGuard from "@/app/components/RoleGuard";
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
   getDocs,
   query,
-  serverTimestamp,
   where,
 } from "firebase/firestore";
 import {
@@ -23,7 +21,7 @@ import {
   sortClientesByRoute,
 } from "@/lib/operacion";
 import { getUserProfile } from "@/lib/authRoles";
-import { filterByEmpresa, getProfileEmpresaId, withEmpresaId } from "@/lib/tenant";
+import { filterByEmpresa, getProfileEmpresaId } from "@/lib/tenant";
 import { buildRouteClosureId, isRouteClosed } from "@/lib/routeClosure";
 import SignOutButton from "@/app/components/SignOutButton";
 import {
@@ -538,25 +536,18 @@ function CarteristaContent() {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
-          const fecha = new Date().toISOString().slice(0, 10);
-
-          await addDoc(collection(db, "ubicacionesRuta"), withEmpresaId({
-            uid: profile.uid,
-            empleadoNombre: profile.nombre || "",
-            empleadoRol: profile.role || "",
-            fecha,
-            diaRuta: assignedDay,
-            ruta: assignedRoute,
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            timestamp: serverTimestamp(),
-          }, profile));
+          await postRutaOperacion("ubicacion.write", {
+            ubicacion: {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+            },
+          });
 
           setLocationMessage("Ubicacion enviada al administrador.");
         } catch (error) {
           console.error("Error guardando ubicacion:", error);
-          setLocationMessage("No se pudo guardar la ubicacion.");
+          setLocationMessage(error.message || "No se pudo guardar la ubicacion.");
         } finally {
           setSendingLocation(false);
         }

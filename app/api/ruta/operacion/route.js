@@ -160,6 +160,42 @@ async function createRouteExpense({ db, actor, route, body }) {
   return { id: ref.id };
 }
 
+async function writeRouteLocation({ db, actor, route, body }) {
+  const lat = Number(body.lat);
+  const lng = Number(body.lng);
+  const accuracy = number(body.accuracy);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    badRequest("Ubicacion invalida.");
+  }
+
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    badRequest("Coordenadas fuera de rango.");
+  }
+
+  const payload = {
+    empresaId: route.empresaId,
+    uid: actor.uid,
+    empleadoNombre: actor.nombre || "",
+    empleadoRol: actor.role || "",
+    fecha: route.fecha,
+    diaRuta: route.diaRuta,
+    ruta: route.ruta,
+    lat,
+    lng,
+    accuracy,
+    timestamp: FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+    createdBy: actor.uid,
+    createdByEmail: actor.email,
+  };
+  const ref = db.collection("ubicacionesRuta").doc();
+
+  await ref.set(payload);
+
+  return { id: ref.id };
+}
+
 async function createRouteClient({ db, actor, route, body }) {
   const nombre = text(body.nombre);
 
@@ -581,6 +617,12 @@ export async function POST(request) {
     if (action === "gasto.create") {
       return NextResponse.json(
         await createRouteExpense({ db, actor, route, body: body.gasto || body })
+      );
+    }
+
+    if (action === "ubicacion.write") {
+      return NextResponse.json(
+        await writeRouteLocation({ db, actor, route, body: body.ubicacion || body })
       );
     }
 
