@@ -14,11 +14,13 @@ const requiredFiles = [
   "app/components/ErrorReporter.jsx",
   "lib/tenant.js",
   "scripts/backupFirestore.mjs",
+  "scripts/restoreFirestoreBackup.mjs",
   "scripts/migrateEmpresaId.mjs",
 ];
 
 const requiredEnv = [
   "NEXT_PUBLIC_APP_URL",
+  "NEXT_PUBLIC_DEFAULT_EMPRESA_ID",
   "MERCADOPAGO_ACCESS_TOKEN",
   "FB_PROJECT_ID",
   "FB_CLIENT_EMAIL",
