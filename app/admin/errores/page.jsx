@@ -9,8 +9,10 @@ import {
   collection,
   doc,
   getDocs,
+  query,
   serverTimestamp,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import {
   AlertTriangle,
@@ -58,11 +60,12 @@ export default function ErroresAdminPage() {
 
     try {
       const empresaId = getEmpresaActual();
-      const snap = await getDocs(collection(db, "erroresSistema"));
+      const snap = await getDocs(
+        query(collection(db, "erroresSistema"), where("empresaId", "==", empresaId))
+      );
       setErrores(
         snap.docs
           .map((docu) => ({ id: docu.id, ...docu.data() }))
-          .filter((item) => (item.empresaId || DEFAULT_EMPRESA_ID) === empresaId)
           .sort(
             (a, b) =>
               getTimestampValue(b.createdAt) - getTimestampValue(a.createdAt)
@@ -106,6 +109,8 @@ export default function ErroresAdminPage() {
         error.path,
         error.userEmail,
         error.userRole,
+        error.severity,
+        error.fingerprint,
       ]
         .filter(Boolean)
         .some((value) => normalize(value).includes(term));
@@ -142,6 +147,7 @@ export default function ErroresAdminPage() {
       estado,
       revisadoAt: estado === "revisado" ? serverTimestamp() : error.revisadoAt || null,
       resueltoAt: estado === "resuelto" ? serverTimestamp() : error.resueltoAt || null,
+      revisadoPor: localStorage.getItem("userEmail") || "",
       updatedAt: serverTimestamp(),
     });
     await cargarErrores(false);
@@ -230,6 +236,7 @@ export default function ErroresAdminPage() {
               <tr>
                 <th>Fecha</th>
                 <th>Area</th>
+                <th>Severidad</th>
                 <th>Mensaje</th>
                 <th>Usuario</th>
                 <th>Estado</th>
@@ -252,12 +259,21 @@ export default function ErroresAdminPage() {
                     <td>
                       <strong>{error.area || "cliente"}</strong>
                       <br />
-                      <small>{error.path || "Sin ruta"}</small>
+                      <small>{error.modulo || error.path || "Sin modulo"}</small>
+                    </td>
+                    <td>
+                      <span className={`debt-pill ${error.severity === "critical" ? "rojo" : "amarillo"}`}>
+                        {error.severity || "error"}
+                      </span>
+                      <br />
+                      <small>{error.fingerprint || "sin huella"}</small>
                     </td>
                     <td>
                       <strong>{error.name || "Error"}</strong>
                       <br />
                       <small>{error.message || "Sin mensaje"}</small>
+                      <br />
+                      <small>{error.path || "Sin ruta"}</small>
                     </td>
                     <td>
                       {error.userEmail || "Sin usuario"}
@@ -292,7 +308,7 @@ export default function ErroresAdminPage() {
               })}
               {!loading && erroresFiltrados.length === 0 && (
                 <tr>
-                  <td colSpan="6">No hay errores con esos filtros.</td>
+                  <td colSpan="7">No hay errores con esos filtros.</td>
                 </tr>
               )}
             </tbody>
