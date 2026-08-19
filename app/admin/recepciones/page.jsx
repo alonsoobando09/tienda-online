@@ -415,6 +415,12 @@ export default function RecepcionesAdminPage() {
 
     try {
       const token = await auth.currentUser?.getIdToken();
+
+      if (!token) {
+        alert("Debes iniciar sesion para guardar recepciones.");
+        return;
+      }
+
       const response = await fetch(
         `/api/admin/recepciones?empresaId=${encodeURIComponent(getCurrentEmpresaId())}`,
         {
@@ -437,7 +443,24 @@ export default function RecepcionesAdminPage() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(result.error || "No se pudo guardar la recepcion.");
+        const invalidos = Array.isArray(result.invalidos)
+          ? result.invalidos
+              .map(
+                (item) =>
+                  `${item.nombre || item.productoId}: salio ${item.salio}, devuelto ${item.devuelto}`
+              )
+              .join("\n- ")
+          : "";
+        const alertas = Array.isArray(result.alertas)
+          ? result.alertas.join("\n- ")
+          : "";
+        const details = invalidos || alertas;
+
+        throw new Error(
+          `${result.error || "No se pudo guardar la recepcion."}${
+            details ? `\n- ${details}` : ""
+          }`
+        );
       }
 
       setSelectedId("");

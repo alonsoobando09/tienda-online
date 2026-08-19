@@ -205,6 +205,10 @@ export async function POST(request) {
       return NextResponse.json(
         {
           error: "No puedes recibir mas unidades de las despachadas.",
+          detalles: invalidos.map(
+            (item) =>
+              `${item.nombre || item.productoId}: salio ${item.salio}, devuelto ${item.devuelto}`
+          ),
           invalidos,
         },
         { status: 400 }
