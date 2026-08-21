@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
-import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { auth } from "@/lib/firebase";
 import { getDiaLabel } from "@/lib/operacion";
+import { getCurrentEmpresaId } from "@/lib/tenant";
 import { Clock, LocateFixed, MapPin, RefreshCcw, Search } from "lucide-react";
 
 function timestampMs(value) {
@@ -88,22 +88,55 @@ export default function MapaAdminPage() {
 
   async function cargarUbicaciones() {
     setLoading(true);
-    const snap = await getDocs(collection(db, "ubicacionesRuta"));
-    setUbicaciones(
-      snap.docs.map((docu) => ({
-        id: docu.id,
-        ...docu.data(),
-      }))
-    );
+    const token = await auth.currentUser?.getIdToken();
+
+    if (!token) {
+      setUbicaciones([]);
+      setLoading(false);
+      return;
+    }
+
+    const params = new URLSearchParams({ empresaId: getCurrentEmpresaId() });
+    const response = await fetch(`/api/admin/mapa?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(result.error || "No se pudo cargar el mapa.");
+    }
+
+    setUbicaciones(Array.isArray(result.items) ? result.items : []);
     setLoading(false);
+  }
+
+  async function cargarUbicacionesSeguro() {
+    try {
+      await cargarUbicaciones();
+    } catch (error) {
+      console.error("Error cargando mapa:", error);
+      alert(error.message || "No se pudo cargar el mapa.");
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      cargarUbicaciones();
+      cargarUbicacionesSeguro();
     }, 0);
 
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(
+      () => {
+        cargarUbicacionesSeguro();
+      },
+      60 * 1000
+    );
+
+    return () => clearInterval(interval);
   }, []);
 
   const ultimasUbicaciones = useMemo(() => {
@@ -187,7 +220,7 @@ export default function MapaAdminPage() {
         title="Mapa en tiempo real"
         subtitle="Ultima ubicacion reportada por carteristas y ayudantes en ruta."
         actions={
-          <button className="admin-button" disabled={loading} onClick={cargarUbicaciones}>
+          <button className="admin-button" disabled={loading} onClick={cargarUbicacionesSeguro}>
             <RefreshCcw size={18} />
             {loading ? "Cargando..." : "Actualizar"}
           </button>
