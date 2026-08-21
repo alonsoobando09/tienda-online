@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import AdminGuard from "@/app/components/AdminGuard";
 import AdminShell from "@/app/admin/components/AdminShell";
+import { auth } from "@/lib/firebase";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -40,23 +41,35 @@ export default function AdminPage() {
 
   useEffect(() => {
     let active = true;
-    const empresaId = localStorage.getItem("empresaId") || "proveedor-central";
-    const params = new URLSearchParams({ empresaId });
 
-    fetch(`/api/admin/dashboard?${params.toString()}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("No se pudo cargar el dashboard");
-        return res.json();
-      })
-      .then((result) => {
+    async function cargarDashboard() {
+      try {
+        const empresaId = localStorage.getItem("empresaId") || "proveedor-central";
+        const params = new URLSearchParams({ empresaId });
+        const token = await auth.currentUser?.getIdToken();
+
+        if (!token) {
+          throw new Error("No hay sesion activa. Vuelve a ingresar.");
+        }
+
+        const response = await fetch(`/api/admin/dashboard?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(result.error || "No se pudo cargar el dashboard");
+        }
+
         if (active) setData(result);
-      })
-      .catch((err) => {
+      } catch (err) {
         if (active) setError(err.message);
-      })
-      .finally(() => {
+      } finally {
         if (active) setLoading(false);
-      });
+      }
+    }
+
+    cargarDashboard();
 
     return () => {
       active = false;

@@ -1,13 +1,32 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/firebase";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
-import { normalizeEmpresaId } from "@/lib/tenant";
-import { filterByEmpresaId } from "@/lib/firestoreTenant";
+import { getAdminDb } from "@/lib/firebaseAdmin";
+import {
+  authErrorResponse,
+  getRequestEmpresaId,
+  requirePermission,
+} from "@/lib/serverAuth";
 
 function toDate(value) {
   if (!value) return null;
   if (typeof value.toDate === "function") return value.toDate();
+  if (value.seconds) return new Date(value.seconds * 1000);
   return new Date(value);
+}
+
+function serializeValue(value) {
+  if (!value) return value ?? null;
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.toISOString() : null;
+  }
+  if (typeof value.toDate === "function") return value.toDate().toISOString();
+  if (value.seconds) return new Date(value.seconds * 1000).toISOString();
+  if (Array.isArray(value)) return value.map(serializeValue);
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, serializeValue(entry)])
+    );
+  }
+  return value;
 }
 
 function sameDay(a, b) {
@@ -34,116 +53,60 @@ function getDebtColor(dias) {
   return "verde";
 }
 
+async function getEmpresaDocs(db, collectionName, empresaId) {
+  const snapshot = await db
+    .collection(collectionName)
+    .where("empresaId", "==", empresaId)
+    .get();
+
+  return snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+}
+
 export async function GET(request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const empresaId = normalizeEmpresaId(searchParams.get("empresaId"));
+    const actor = await requirePermission(request, "dashboard.read");
+    const empresaId = getRequestEmpresaId(request, actor);
+    const adminDb = getAdminDb();
 
     const [
-      facturasSnapshot,
-      productosSnapshot,
-      clientesSnapshot,
-      recepcionesSnapshot,
-      liquidacionesSnapshot,
-      despachosSnapshot,
-      facturasRutaSnapshot,
-      comprasSnapshot,
-      cuentasPagarSnapshot,
-      gestionesSnapshot,
+      facturasRaw,
+      productos,
+      clientesLista,
+      recepciones,
+      liquidaciones,
+      despachos,
+      facturasRuta,
+      compras,
+      cuentasPagar,
+      gestionesRuta,
     ] = await Promise.all([
-      getDocs(query(collection(db, "facturas"), orderBy("createdAt", "desc"))),
-      getDocs(collection(db, "productos")),
-      getDocs(collection(db, "clientes")),
-      getDocs(collection(db, "recepciones")),
-      getDocs(collection(db, "liquidaciones")),
-      getDocs(collection(db, "despachos")),
-      getDocs(collection(db, "facturasRuta")),
-      getDocs(collection(db, "compras")),
-      getDocs(collection(db, "cuentasPagar")),
-      getDocs(collection(db, "gestionesRuta")),
+      getEmpresaDocs(adminDb, "facturas", empresaId),
+      getEmpresaDocs(adminDb, "productos", empresaId),
+      getEmpresaDocs(adminDb, "clientes", empresaId),
+      getEmpresaDocs(adminDb, "recepciones", empresaId),
+      getEmpresaDocs(adminDb, "liquidaciones", empresaId),
+      getEmpresaDocs(adminDb, "despachos", empresaId),
+      getEmpresaDocs(adminDb, "facturasRuta", empresaId),
+      getEmpresaDocs(adminDb, "compras", empresaId),
+      getEmpresaDocs(adminDb, "cuentasPagar", empresaId),
+      getEmpresaDocs(adminDb, "gestionesRuta", empresaId),
     ]);
 
     const hoy = new Date();
 
-    const facturas = facturasSnapshot.docs.map((docu) => ({
-      id: docu.id,
-      ...docu.data(),
-      fecha: toDate(docu.data().createdAt),
-    }));
-
-    const productos = filterByEmpresaId(
-      productosSnapshot.docs.map((docu) => ({
-        id: docu.id,
-        ...docu.data(),
-      })),
-      empresaId
-    );
-
-    const clientesLista = filterByEmpresaId(
-      clientesSnapshot.docs.map((docu) => ({
-        id: docu.id,
-        ...docu.data(),
-      })),
-      empresaId
-    );
-
-    const recepciones = filterByEmpresaId(
-      recepcionesSnapshot.docs.map((docu) => ({
-        id: docu.id,
-        ...docu.data(),
-      })),
-      empresaId
-    );
-
-    const liquidaciones = filterByEmpresaId(
-      liquidacionesSnapshot.docs.map((docu) => ({
-        id: docu.id,
-        ...docu.data(),
-      })),
-      empresaId
-    );
-
-    const despachos = filterByEmpresaId(
-      despachosSnapshot.docs.map((docu) => ({
-        id: docu.id,
-        ...docu.data(),
-      })),
-      empresaId
-    );
-
-    const facturasRuta = filterByEmpresaId(
-      facturasRutaSnapshot.docs.map((docu) => ({
-        id: docu.id,
-        ...docu.data(),
-      })),
-      empresaId
-    );
-
-    const compras = filterByEmpresaId(
-      comprasSnapshot.docs.map((docu) => ({
-        id: docu.id,
-        ...docu.data(),
-      })),
-      empresaId
-    );
-
-    const cuentasPagar = filterByEmpresaId(
-      cuentasPagarSnapshot.docs.map((docu) => ({
-        id: docu.id,
-        ...docu.data(),
-      })),
-      empresaId
-    );
-
-    const gestionesRuta = filterByEmpresaId(
-      gestionesSnapshot.docs.map((docu) => ({
-        id: docu.id,
-        ...docu.data(),
-      })),
-      empresaId
-    );
-
-    const facturasEmpresa = filterByEmpresaId(facturas, empresaId);
+    const facturasEmpresa = facturasRaw
+      .map((factura) => ({
+        ...factura,
+        fecha: toDate(factura.createdAt),
+      }))
+      .sort((a, b) => {
+        const fechaA = a.fecha?.getTime?.() || 0;
+        const fechaB = b.fecha?.getTime?.() || 0;
+        return fechaB - fechaA;
+      });
 
     const fechaHoy = hoy.toISOString().slice(0, 10);
     const ventasHoyLista = facturasEmpresa.filter((factura) =>
@@ -634,16 +597,13 @@ export async function GET(request) {
         dia,
         ventas,
       })),
-      ultimasVentas: facturasEmpresa.slice(0, 8),
-      productos: productos.slice(0, 12),
-      bajoStock,
+      ultimasVentas: serializeValue(facturasEmpresa.slice(0, 8)),
+      productos: serializeValue(productos.slice(0, 12)),
+      bajoStock: serializeValue(bajoStock),
     });
   } catch (error) {
     console.error("Error dashboard:", error);
 
-    return NextResponse.json(
-      { error: "Error cargando dashboard" },
-      { status: 500 }
-    );
+    return authErrorResponse(error);
   }
 }
